@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!--rosrun gmapping slam_gmapping scan:=base_scan-->
+<!--    <node pkg="gmapping" type="slam_gmapping" name="gmapping" args="scan:=base_scan" output="screen"/>-->
+
+    <arg name="bag_path_1" default="$(find pf_localisation)/data/sim_data/simpath1.bag" />
+    <arg name="bag_path_2" default="$(find pf_localisation)/data/sim_data/simpath2.bag" />
+    <arg name="bag" default="1" />
+    <arg name="bag_path" unless="$(eval bag == '2')" value="$(arg bag_path_1)"/>
+    <arg name="bag_path" if="$(eval bag == '2')" value="$(arg bag_path_2)"/>
+    <!--    rosbag play <path to bag file>/<bag file>-->
+    <node pkg="rosbag" type="play" name="rosbag" args="$(arg bag_path)" output="screen"/>
+
+</launch>
