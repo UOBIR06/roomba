@@ -1,0 +1,5 @@
+global_costmap:
+    global_frame: map
+    robot_base_frame: base_link
+    update_frequency: 5.0 # Hz, while gmapping updates every 1/5 Hz
+    static_map: false # because we use SLAM

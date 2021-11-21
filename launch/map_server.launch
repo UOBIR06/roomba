@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-
-<launch>
-<!--rosrun stage_ros stageros src/pf_localisation/data/sim_data/meeting.world-->
-  <node name="stageros" pkg="stage_ros" type="stageros" args="$(find pf_localisation)/data/sim_data/meeting.world" />
-<!--rosrun map_server map_server src/pf_localisation/data/sim_data/meeting.yaml -->
-  <node name="map_server" pkg="map_server" type="map_server" args="$(find pf_localisation)/data/sim_data/meeting.yaml" />
-
-</launch>

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(pf_localisation)
+project(roomba)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   sensor_msgs
   tf
+  move_base
 )
 
 ## System dependencies are found with CMake's conventions
