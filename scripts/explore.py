@@ -85,6 +85,7 @@ class Explorer(object):
         self.data = msg.data
 
         if self.tf.canTransform('/base_link', '/map', rospy.Time()):
+
             # FIXME: This is so fiddly. Sometimes the estimated pose is
             # really good, most other times it's absolutely terrible.
             # I tried using another SLAM package, hector_mapping, which had
@@ -102,10 +103,15 @@ class Explorer(object):
             # it may have negative components. I don't know how to convert from
             # map to grid index properly. As it is, px & py may be negative and
             # the check below always triggers, so nothing ever happens.
-
+            
+            #using the px / py calculation from ros-planning github
+            #the map scale has been left as 1, I assume our maps will all have this scale
+            #but could be wrong
+            px = (math.floor((p[0] - MapMetaData.origin[0]) /  0.5 )+ MapMetaData.resolution[0]/2)
+            py = (math.floor((p[1] - MapMetaData.origin[1]) /  0.5 )+ MapMetaData.resolution[1]/2)
             # Sanity check, robot should be in free cell
-            px = int(p[0] / self.info.resolution + 0.5)
-            py = int(p[1] / self.info.resolution + 0.5)
+            #px = int(p[0] / self.info.resolution + 0.5)
+            #py = int(p[1] / self.info.resolution + 0.5)
 
             if self.data[px + py * self.info.width] != self.FREE_CELL:
                 rospy.logerr(f'Pose <{p[0]}, {p[1]}> -> <{px}, {py}> is not free space!')
