@@ -5,6 +5,7 @@ from nav_msgs.msg import MapMetaData, OccupancyGrid
 import tf
 from tf.msg import tfMessage
 import math
+from visualization_msgs.msg import Marker
 
 class Explorer(object):
     FREE_CELL = 0
@@ -13,26 +14,20 @@ class Explorer(object):
 
     def __init__(self):
         self.tf = tf.TransformListener()
-        self.tf_sub = rospy.Subscriber('/tf', tfMessage, self.tf_callback)
         self.map_sub = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         self.pose_pub = rospy.Publisher('/estimatedpose', PoseStamped, queue_size=1)
+        self.mark_pub = rospy.Publisher('/marker', Marker, queue_size=1)
 
         # TODO: Play with these values
         self.alpha = 0.1
         self.beta = 1
 
-    def tf_callback(self, msg):
-        pass
-
-    def get_occ(self, x, y):
-        if x < 0 or y < 0 or x >= self.info.width or y >= self.info.height:
-            raise IndexError(f'Index <{x}, {y}> is out of bounds for map size <{self.info.width}, {self.info.height}>')
-        return self.data[x + y * self.info.width]
-
-    def seed_fill(self, x, y):
+    def build_frontier(self, x, y):
         # Initialize search
         queue = [ (x, y) ]
-        cells = []
+        cx = 0
+        cy = 0
+        n = 0
 
         while queue:
             # Visit cell
@@ -40,130 +35,185 @@ class Explorer(object):
             self.visit[(x, y)] = 0 # Use zero index
 
             # Look at 8 neighbours
-            is_frontier = False
-            neighbours = []
-            for dx in range(-1,2):
-                for dy in range(-1,2):
-                    if dx == dy == 0:
-                        continue # current cell
+            for nx, ny in self.nhood_8(x, y):
+                if self.is_frontier(nx, ny):
+                   queue.append((nx, ny))
+                   wx, wy = self.map_to_world(nx, ny)
+                   cx = cx + wx
+                   cy = cy + wy
+                   n = n + 1
 
-                    nx = x + dx
-                    ny = y + dy
-                    if nx < 0 or ny < 0 or nx >= self.info.width or ny >= self.info.height:
-                        continue # out of bounds
-                    if self.visit.get((nx, ny), -1) >= 0:
-                        continue # already visited
+        # Calculate centre
+        cx = cx / n
+        cy = cy / n
+        return n, (cx, cy)
 
-                    occ = self.data[nx + ny * self.info.width]
-                    if occ == self.FULL_CELL:
-                        continue # don't process occupied cells
-                    if occ == self.FREE_CELL:
-                        is_frontier = True # Touching a FREE_CELL
-                    if occ == self.UKNW_CELL:
-                        neighbours.append((nx, ny)) # Neighbour UKNW_CELL
+    def get_cell(self, x, y):
+        if x < 0 or y < 0 or x >= self.info.width or y >= self.info.height:
+            raise IndexError(f'Index <{x}, {y}> is out of bounds')
+        return self.data[x + y * self.info.width]
 
-                # Update frontier 
-                if is_frontier:
-                    cells.append((x, y))
-                    queue.extend(neighbours)
+    def world_to_map(self, wx, wy):
+        mx = int((wx - self.info.origin.position.x) / self.info.resolution + 0.5)
+        my = int((wy - self.info.origin.position.y) / self.info.resolution + 0.5)
+        if mx < 0 or my < 0 or mx >= self.info.width or my >= self.info.height:
+            rospy.logerr(f'Map indices <{mx}, {my}> are out of bounds')
+            return None
+        return mx, my
 
-            # Calculate centre
-            n = len(cells)
-            cx = 0
-            cy = 0
-            for x, y in cells:
-                cx = cx + x
-                cy = cy + y
-            cx = cx / n
-            cy = cy / n
+    def map_to_world(self, mx, my):
+        wx = self.info.origin.position.x + (mx + 0.5) * self.info.resolution
+        wy = self.info.origin.position.y + (my + 0.5) * self.info.resolution
+        return wx, wy
 
-            return n, (cx, cy)
+    def nhood_4(self, x, y):
+        nhood = []
+        if x > 0:
+            nhood.append((x - 1, y))
+        if x < self.info.width - 1:
+            nhood.append((x + 1, y))
+        if y > 0:
+            nhood.append((x, y - 1))
+        if y < self.info.height - 1:
+            nhood.append((x, y + 1))
+        return nhood
+
+    def nhood_8(self, x, y):
+        nhood = self.nhood_4(x, y)
+        if x > 0 and y > 0:
+            nhood.append((x - 1, y - 1))
+        if x > 0 and y < self.info.height - 1:
+            nhood.append((x - 1, y + 1))
+        if x < self.info.width - 1 and y > 0:
+            nhood.append((x + 1, y - 1))
+        if x < self.info.width - 1 and y < self.info.height - 1:
+            nhood.append((x + 1, y + 1))
+        return nhood
+
+    def is_frontier(self, x, y):
+        if self.visit.get((x, y), -1) >= 0:
+            return False  # already visited
+
+        for nx, ny in self.nhood_4(x, y):
+            if self.get_cell(nx, ny) == self.FREE_CELL:
+                return True # has free neighbour
+        return False
+
+    def nearest_free(self, x, y):
+        queue = [ (x, y) ]
+        visit = {}
+        while queue:
+            cell = queue.pop()
+            visit[cell] = True
+
+            if self.get_cell(*cell) == self.FREE_CELL:
+                return cell
+            for neigh in self.nhood_8(*cell):
+                if not visit.get(neigh, False):
+                    queue.append(neigh)
+        return None
+
+    def mark_start(self, x, y):
+        self.mark_point(x, y, 0, 1, 1, 0)
+
+    def mark_goal(self, x, y):
+        self.mark_point(x, y, 1, 0, 1, 0)
+
+    def mark_point(self, x, y, i, r, g, b):
+        m = Marker()
+        m.header.frame_id = 'map'
+        m.header.stamp = rospy.Time()
+
+        m.ns = 'point'
+        m.id = i
+
+        m.type = 2 # Use a sphere
+        m.action = 0 # Add/Modify mark
+
+        m.pose.position = Point(x, y, 0)
+        m.pose.orientation = Quaternion(0, 0, 0, 1)
+        m.scale = Vector3(0.3, 0.3, 0.3)
+
+        m.color.r = r
+        m.color.g = g
+        m.color.b = b
+        m.color.a = 1
+
+        m.lifetime = rospy.Duration(0)
+        self.mark_pub.publish(m)
 
     def map_callback(self, msg):
         self.head = msg.header
         self.info = msg.info
         self.data = msg.data
 
-        if self.tf.canTransform('/base_link', '/map', rospy.Time()):
+        # Check if transform exists
+        if not self.tf.canTransform('base_link', 'map', rospy.Time()):
+            return
 
-            # FIXME: This is so fiddly. Sometimes the estimated pose is
-            # really good, most other times it's absolutely terrible.
-            # I tried using another SLAM package, hector_mapping, which had
-            # terrible issues with divergence. I hate that gmapping is the
-            # best one we have so far. See commented bits in explore.launch
-            p, q = self.tf.lookupTransform('/base_link','/map',rospy.Time())
+        p = PoseStamped()
+        p.header.frame_id = 'base_link'
+        p.header.stamp = rospy.Time()
+        p = self.tf.transformPose('map', p)
+        
+        # DEBUG: Publish pose estimate
+        self.pose_pub.publish(p)
 
-            # DEBUG: Publish pose estimate
-            estimate = PoseStamped()
-            estimate.pose = Pose(Point(*p), Quaternion(*q))
-            estimate.header.frame_id = 'map'
-            self.pose_pub.publish(estimate)
+        # Convert world coordinates to map indices
+        p = p.pose.position
+        p = self.world_to_map(p.x, p.y)
+        if not p:
+            return
+        
+        # Find nearest free cell to start search
+        p = self.nearest_free(*p)
+        if not p:
+            return
+        px, py = p
 
-            # FIXME: Because `p` is in map coordinates, relative to the origin,
-            # it may have negative components. I don't know how to convert from
-            # map to grid index properly. As it is, px & py may be negative and
-            # the check below always triggers, so nothing ever happens.
+        # DEBUG: Publish starting point
+        wx, wy = self.map_to_world(px, py)
+        self.mark_start(wx, wy)
+        
+        # Initialize search
+        # TODO: If I'm not using the index numbers, just use booleans instead
+        queue = [ (px, py, 0) ]
+        frontiers = []
+        self.visit = {}
 
-            #using the px / py calculation from ros-planning github
-           
-            px = (math.floor((p[0] - MapMetaData.origin[0]) / MapMetaData.resolution +  0.5 )+ MapMetaData.width/2)
-            py = (math.floor((p[1] - MapMetaData.origin[1]) / MapMetaData.resolution + 0.5 )+ MapMetaData.height/2)
-            # Sanity check, robot should be in free cell
-            #px = int(p[0] / self.info.resolution + 0.5)
-            #py = int(p[1] / self.info.resolution + 0.5)
+        while queue:
+            # Visit cell
+            x, y, i = queue.pop()
+            self.visit[(x, y)] = i
 
-            if self.data[px + py * self.info.width] != self.FREE_CELL:
-                rospy.logerr(f'Pose <{p[0]}, {p[1]}> -> <{px}, {py}> is not free space!')
-                return
-            
-            # Initialize search
-            queue = [ (px, py, 0) ]
-            frontiers = []
-            self.visit = { (px, py) : 0 }
+            # Look at 4 neighbours
+            for nx, ny in self.nhood_4(x, y):
+                if self.visit.get((nx, ny), -1) >= 0:
+                    continue # already visited
 
-            while queue:
-                # Visit cell
-                x, y, i = queue.pop()
-                self.visit[(x, y)] = i
+                occ = self.get_cell(nx, ny)
+                if occ == self.FREE_CELL:
+                    queue.append((nx, ny, i + 1)) # add to queue
+                if occ == self.UKNW_CELL:
+                    # Current cell is guaranteed to be FREE_CELL and so
+                    # if it has an UKNW_CELL neighbour that's a frontier
+                    n, c = self.build_frontier(nx, ny)
+                    frontiers.append((n, c))
 
-                # Look at 8 neighbours
-                for dx in range(-1,2):
-                    for dy in range(-1,2):
-                        if dx == dy == 0:
-                            continue # current cell
-                        
-                        nx = x + dx
-                        ny = y + dy
-                        if nx < 0 or ny < 0 or nx >= self.info.width or ny >= self.info.height:
-                            continue # out of bounds
-                        if self.visit.get((nx, ny), -1) >= 0:
-                            continue # already visited
+        # Calculate costs
+        min_cost = math.inf
+        goal = None
+        for f in frontiers:
+            n = f[0]
+            x, y = f[1]
+            dist = math.sqrt((x - px)**2 + (y - py)**2)
+            cost = self.alpha * dist - self.beta * n
+            if cost < min_cost:
+                min_cost = cost
+                goal = (x, y)
 
-                        occ = self.data[nx + ny * self.info.width]
-                        if occ == self.FULL_CELL:
-                            continue # don't process occupied cells
-                        if occ == self.FREE_CELL:
-                            queue.append((nx, ny, i + 1)) # add to queue
-                        if occ == self.UKNW_CELL:
-                            # Current cell is guaranteed to be FREE_CELL and so
-                            # if it has an UKNW_CELL neighbour that's a frontier
-                            n, c = self.seed_fill(nx, ny)
-                            frontiers.append((n, c))
-
-                # Calculate costs
-                min_cost = math.inf
-                goal = None
-                for f in frontiers:
-                    n = f[0]
-                    x, y = f[1]
-                    dist = math.sqrt((x - px)**2 + (y - py)**2)
-                    cost = self.alpha * dist - self.beta * n
-                    if cost < min_cost:
-                        min_cost = cost
-                        goal = (x, y)
-
-                # TODO: Set goal
-                print(f'Goal: {goal}')
+        # DEBUG: Publish goal point
+        self.mark_goal(*goal)
                         
 if __name__ == '__main__':
     rospy.init_node('explore')
