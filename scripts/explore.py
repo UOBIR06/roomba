@@ -103,12 +103,11 @@ class Explorer(object):
             # it may have negative components. I don't know how to convert from
             # map to grid index properly. As it is, px & py may be negative and
             # the check below always triggers, so nothing ever happens.
-            
+
             #using the px / py calculation from ros-planning github
-            #the map scale has been left as 1, I assume our maps will all have this scale
-            #but could be wrong
-            px = (math.floor((p[0] - MapMetaData.origin[0]) /  0.5 )+ MapMetaData.resolution[0]/2)
-            py = (math.floor((p[1] - MapMetaData.origin[1]) /  0.5 )+ MapMetaData.resolution[1]/2)
+           
+            px = (math.floor((p[0] - MapMetaData.origin[0]) / MapMetaData.resolution +  0.5 )+ MapMetaData.width/2)
+            py = (math.floor((p[1] - MapMetaData.origin[1]) / MapMetaData.resolution + 0.5 )+ MapMetaData.height/2)
             # Sanity check, robot should be in free cell
             #px = int(p[0] / self.info.resolution + 0.5)
             #py = int(p[1] / self.info.resolution + 0.5)
