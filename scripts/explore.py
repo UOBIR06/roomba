@@ -6,6 +6,7 @@ import tf
 from tf.msg import tfMessage
 import math
 from visualization_msgs.msg import Marker
+from pf_localisation.util import *
 
 class Explorer(object):
     FREE_CELL = 0
@@ -22,6 +23,7 @@ class Explorer(object):
         # TODO: Play with these values
         self.alpha = 0.1
         self.beta = 1
+        self.gamma = 2
 
     def build_frontier(self, x, y):
         # Initialize search
@@ -169,6 +171,7 @@ class Explorer(object):
         self.pose_pub.publish(p)
 
         # Convert world coordinates to map indices
+        theta = getHeading(p.pose.orientation)
         p = p.pose.position
         p = self.world_to_map(p.x, p.y)
         if not p:
@@ -216,7 +219,8 @@ class Explorer(object):
             n = f[0]
             x, y = f[1]
             dist = math.sqrt((x - px)**2 + (y - py)**2)
-            cost = self.alpha * dist - self.beta * n
+            delta_theta = abs(theta - math.atan(y / x))
+            cost = self.alpha * dist - self.beta * n + self.gamma * delta_theta
             if cost < min_cost:
                 min_cost = cost
                 goal = (x, y)
