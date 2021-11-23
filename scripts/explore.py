@@ -12,18 +12,19 @@ class Explorer(object):
     FREE_CELL = 0
     FULL_CELL = 100
     UKNW_CELL = -1
-    temp = 2
 
     def __init__(self):
         self.tf = tf.TransformListener()
         self.map_sub = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         self.pose_pub = rospy.Publisher('/estimatedpose', PoseStamped, queue_size=1)
         self.mark_pub = rospy.Publisher('/marker', Marker, queue_size=100)
+        self.point_id = 0
 
-        # TODO: Play with these values
-        self.alpha = 0.1
-        self.beta = 1
-        self.gamma = 2
+        # TODO: Keep playing with these values
+        self.alpha = 0.7    # Distance to frontier
+        self.beta = 0.3     # Size of frontier (decreases cost)
+        self.gamma = 0.8    # Angle to frontier
+        self.min_size = 20  # Minimum frontier size
 
     def build_frontier(self, x, y):
         # Initialize search
@@ -35,7 +36,7 @@ class Explorer(object):
         while queue:
             # Visit cell
             x, y = queue.pop()
-            self.visit[(x, y)] = 0 # Use zero index
+            self.visit[(x, y)] = 0 # Just use zero
             wx, wy = self.map_to_world(x, y)
             cx = cx + wx
             cy = cy + wy
@@ -49,7 +50,7 @@ class Explorer(object):
         # Calculate centre
         cx = cx / n
         cy = cy / n
-        return n, (cx, cy)
+        return n, cx, cy
 
     def get_cell(self, x, y):
         if x < 0 or y < 0 or x >= self.info.width or y >= self.info.height:
@@ -119,34 +120,34 @@ class Explorer(object):
                     queue.append(neigh)
         return None
 
-    def mark_start(self, x, y):
-        self.mark_point(x, y, 0, 1, 1, 0)
+    def clear_marks(self):
+        m = Marker()
+        m.header.frame_id = 'map'
+        m.header.stamp = rospy.Time()
+        m.ns = 'point'
+        m.action = 3 # Delete all objects in namespace
+        self.mark_pub.publish(m)
+        self.point_id = 0
 
-    def mark_goal(self, x, y):
-        self.mark_point(x, y, 1, 0, 1, 0)
-
-    def mark_front(self, x, y):
-        self.mark_point(x, y, self.temp, 0, 0, 1)
-        self.temp += 1
-
-    def mark_point(self, x, y, i, r, g, b):
+    def mark_point(self, x, y, color = [1, 1, 1], scale = 0.15):
         m = Marker()
         m.header.frame_id = 'map'
         m.header.stamp = rospy.Time()
 
         m.ns = 'point'
-        m.id = i
+        m.id = self.point_id
+        self.point_id += 1
 
         m.type = 1 # Use a cube
         m.action = 0 # Add/Modify mark
 
         m.pose.position = Point(x, y, 0)
         m.pose.orientation = Quaternion(0, 0, 0, 1)
-        m.scale = Vector3(0.15, 0.15, 0.01)
+        m.scale = Vector3(scale, scale, 0.01)
 
-        m.color.r = r
-        m.color.g = g
-        m.color.b = b
+        m.color.r = color[0]
+        m.color.g = color[1]
+        m.color.b = color[2]
         m.color.a = 1
 
         m.lifetime = rospy.Duration(0)
@@ -156,7 +157,6 @@ class Explorer(object):
         self.head = msg.header
         self.info = msg.info
         self.data = msg.data
-        self.temp = 2
 
         # Check if transform exists
         if not self.tf.canTransform('base_link', 'map', rospy.Time()):
@@ -168,6 +168,7 @@ class Explorer(object):
         p = self.tf.transformPose('map', p)
         
         # DEBUG: Publish pose estimate
+        self.clear_marks()
         self.pose_pub.publish(p)
 
         # Convert world coordinates to map indices
@@ -185,18 +186,17 @@ class Explorer(object):
 
         # DEBUG: Publish starting point
         wx, wy = self.map_to_world(px, py)
-        self.mark_start(wx, wy)
+        self.mark_point(wx, wy, [1, 1, 0])
         
         # Initialize search
-        # TODO: If I'm not using the index numbers, just use booleans instead
         queue = [ (px, py, 0) ]
         frontiers = []
         self.visit = {}
 
         while queue:
             # Visit cell
-            x, y, i = queue.pop()
-            self.visit[(x, y)] = i
+            x, y, l = queue.pop()
+            self.visit[(x, y)] = l
 
             # Look at 4 neighbours
             for nx, ny in self.nhood_4(x, y):
@@ -205,28 +205,81 @@ class Explorer(object):
 
                 occ = self.get_cell(nx, ny)
                 if occ == self.FREE_CELL:
-                    queue.append((nx, ny, i + 1)) # add to queue
+                    queue.append((nx, ny, l + 1)) # add to queue
                 if occ == self.UKNW_CELL:
                     # Current cell is guaranteed to be FREE_CELL and so
                     # if it has an UKNW_CELL neighbour that's a frontier
-                    n, c = self.build_frontier(nx, ny)
-                    frontiers.append((n, c))
+                    n, cx, cy = self.build_frontier(nx, ny)
+                    if n < self.min_size:
+                        continue
+                    # TODO: Ignore frontiers that are unreachable using move_base services
+                    frontiers.append((n, cx, cy, l)) # num. of cells, centre, path length (nearest cell)
+
+        # Check for frontiers
+        if not frontiers:
+            rospy.loginfo('No frontiers found. Has the map been fully explored?')
+            return
+
+        # Find min & max for normalization
+        # NOTE: Commented are the advice of Gao et al. which is not very good
+        # because it causes the frontier with the minimum value to be normalized
+        # as 0, and the maximum value as 1. This screws with the cost calculations
+        # as seen from experience. Instead, dividing by the total is better.
+
+        #min_len = math.inf
+        #max_len = -1
+        #min_num = math.inf
+        #max_num = -1
+        #min_ang = math.inf
+        #max_ang = -1
+        t_len = 0
+        t_num = 0
+        t_ang = 0
+        for n, x, y, l in frontiers:
+            #min_len = min(min_len, l)
+            #max_len = max(max_len, l)
+            #min_num = min(min_num, n)
+            #max_num = max(max_num, n)
+
+            t = abs(theta - math.atan(y / x))
+            t_len += l
+            t_num += n
+            t_ang += t
+            #min_ang = min(min_ang, t)
+            #max_ang = max(max_ang, t)
+
+        #len_range = max_len - min_len
+        #num_range = max_num - min_num
+        #ang_range = max_ang - min_ang 
 
         # Calculate costs
         min_cost = math.inf
         goal = None
-        for f in frontiers:
-            n = f[0]
-            x, y = f[1]
-            dist = math.sqrt((x - px)**2 + (y - py)**2)
-            delta_theta = abs(theta - math.atan(y / x))
-            cost = self.alpha * dist - self.beta * n + self.gamma * delta_theta
+        for n, x, y, l in frontiers:
+            t = abs(theta - math.atan(y / x))
+
+            # Normalize
+            #l = (l - min_len) / len_range
+            #n = (n - min_num) / num_range
+            #t = (t - min_ang) / ang_range
+            l = l / t_len
+            n = n / t_num
+            t = t / t_ang
+
+            assert 0 <= l <= 1
+            assert 0 <= n <= 1
+            assert 0 <= t <= 1
+
+            # Update cost & goal
+            cost = self.alpha * l - self.beta * n + self.gamma * t
             if cost < min_cost:
                 min_cost = cost
                 goal = (x, y)
 
         # DEBUG: Publish goal point
-        self.mark_goal(*goal)
+        self.mark_point(*goal, [0, 1, 0])
+
+        # TODO: Send goal to move_base
                         
 if __name__ == '__main__':
     rospy.init_node('explore')

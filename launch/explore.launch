@@ -24,6 +24,12 @@
         <param name="transform_publish_period" value="1"/>
     </node>
 
+    <!-- Our node :) -->
+    <!--node name="explore" pkg="roomba" type="explore.py"/-->
+
+    <!-- Teleop (for convenience) -->
+    <include file="$(find socspioneer)/launch/keyboard_teleop.launch"/>
+
     <!-- Navigation stack setup -->
     <!--node name="nav" pkg="move_base" type="move_base" respawn="false" output="screen">
         <rosparam file="$(find roomba)/launch/costmap_common.yaml" command="load" ns="global_costmap"/>
