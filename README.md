@@ -6,6 +6,13 @@ Final project of Group 6, Intelligent Robotics 2021, UoB
 ## useful commands
 
 ```bash
+#setups for dependency
+rosdep update
+rosdep install roomba
+catkin_make
+```
+
+```bash
 # start the project:
 roslaunch pf_localisation pf_mcl.launch
 # use the bag1 files
