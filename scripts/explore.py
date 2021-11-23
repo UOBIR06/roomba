@@ -11,12 +11,13 @@ class Explorer(object):
     FREE_CELL = 0
     FULL_CELL = 100
     UKNW_CELL = -1
+    temp = 2
 
     def __init__(self):
         self.tf = tf.TransformListener()
         self.map_sub = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         self.pose_pub = rospy.Publisher('/estimatedpose', PoseStamped, queue_size=1)
-        self.mark_pub = rospy.Publisher('/marker', Marker, queue_size=1)
+        self.mark_pub = rospy.Publisher('/marker', Marker, queue_size=100)
 
         # TODO: Play with these values
         self.alpha = 0.1
@@ -33,15 +34,15 @@ class Explorer(object):
             # Visit cell
             x, y = queue.pop()
             self.visit[(x, y)] = 0 # Use zero index
+            wx, wy = self.map_to_world(x, y)
+            cx = cx + wx
+            cy = cy + wy
+            n = n + 1
 
             # Look at 8 neighbours
             for nx, ny in self.nhood_8(x, y):
                 if self.is_frontier(nx, ny):
-                   queue.append((nx, ny))
-                   wx, wy = self.map_to_world(nx, ny)
-                   cx = cx + wx
-                   cy = cy + wy
-                   n = n + 1
+                    queue.append((nx, ny))
 
         # Calculate centre
         cx = cx / n
@@ -91,6 +92,9 @@ class Explorer(object):
         return nhood
 
     def is_frontier(self, x, y):
+        if self.get_cell(x, y) != self.UKNW_CELL:
+            return False
+
         if self.visit.get((x, y), -1) >= 0:
             return False  # already visited
 
@@ -119,6 +123,10 @@ class Explorer(object):
     def mark_goal(self, x, y):
         self.mark_point(x, y, 1, 0, 1, 0)
 
+    def mark_front(self, x, y):
+        self.mark_point(x, y, self.temp, 0, 0, 1)
+        self.temp += 1
+
     def mark_point(self, x, y, i, r, g, b):
         m = Marker()
         m.header.frame_id = 'map'
@@ -127,12 +135,12 @@ class Explorer(object):
         m.ns = 'point'
         m.id = i
 
-        m.type = 2 # Use a sphere
+        m.type = 1 # Use a cube
         m.action = 0 # Add/Modify mark
 
         m.pose.position = Point(x, y, 0)
         m.pose.orientation = Quaternion(0, 0, 0, 1)
-        m.scale = Vector3(0.3, 0.3, 0.3)
+        m.scale = Vector3(0.15, 0.15, 0.01)
 
         m.color.r = r
         m.color.g = g
@@ -146,6 +154,7 @@ class Explorer(object):
         self.head = msg.header
         self.info = msg.info
         self.data = msg.data
+        self.temp = 2
 
         # Check if transform exists
         if not self.tf.canTransform('base_link', 'map', rospy.Time()):
