@@ -46,12 +46,14 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>move_base</build_depend>
+  <build_depend>ipa_coverage_planning</build_depend>
   <run_depend>geometry_msgs</run_depend>
   <run_depend>nav_msgs</run_depend>
   <run_depend>rospy</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>tf</run_depend>
   <run_depend>move_base</run_depend>
+  <run_depend>ipa_coverage_planning</run_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

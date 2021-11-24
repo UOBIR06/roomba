@@ -7,26 +7,30 @@ Final project of Group 6, Intelligent Robotics 2021, UoB
 
 ```bash
 #setups for dependency
-rosdep update
+cd <catkin_ws>/src
+git clone https://github.com/UOBIR06/ipa_coverage_planning.git  # on dev branch
+rosdep update 
+rosdep install --from-paths src --ignore-src
 rosdep install roomba
+cd <catkin_ws>
 catkin_make
 ```
 
 ```bash
-# start the project:
-roslaunch pf_localisation pf_mcl.launch
-# use the bag1 files
-roslaunch pf_localisation bag.launch bag:=1
-# use the bag2 files
-roslaunch pf_localisation bag.launch bag:=2
+# demo of room_exploration given png map
+roslaunch roomba room_exploration.launch
 ```
 
-#### In simulated world:
+[comment]: <> (#### In simulated world:)
 
-The localisation node can be tested in stage simulation (without the need for robot).
+[comment]: <> (The localisation node can be tested in stage simulation &#40;without the need for robot&#41;.)
 
-        roscore
-        rosrun map_server map_server <catkin_ws>/map.yaml
-        rosrun stage_ros stageros <catkin_ws>/src/socspioneer/data/meeting.world
-        roslaunch socspioneer keyboard_teleop.launch  # ---- run only if you want to move robot using keyboard
-        rosrun pf_localisation node.py    # ----- requires laser_trace, and completed pf.py methods.
+[comment]: <> (        roscore)
+
+[comment]: <> (        rosrun map_server map_server <catkin_ws>/map.yaml)
+
+[comment]: <> (        rosrun stage_ros stageros <catkin_ws>/src/socspioneer/data/meeting.world)
+
+[comment]: <> (        roslaunch socspioneer keyboard_teleop.launch  # ---- run only if you want to move robot using keyboard)
+
+[comment]: <> (        rosrun pf_localisation node.py    # ----- requires laser_trace, and completed pf.py methods.)

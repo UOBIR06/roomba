@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- Visualizer and simulator -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/room_explore.rviz"/>
+<!--    <node name="stage" pkg="stage_ros" type="stageros" args="&#45;&#45;clock $(find roomba)/data/sim_data/meeting.world"/>-->
+
+	<!-- room exploration server node -->
+	<node ns="room_exploration" pkg="ipa_room_exploration" type="room_exploration_server" name="room_exploration_server" output="screen" respawn="true" respawn_delay="2">
+		<rosparam command="load" file="$(find roomba)/data/param/room_exploration_action_server_params.yaml"/>
+	</node>
+
+	<!-- room exploration client node -->
+	<arg name="robot_radius" default="0.5"/>
+	<arg name="coverage_radius" default="0.5"/>
+	<arg name="use_test_maps" default="true"/>
+
+	<node ns="room_exploration" pkg="ipa_room_exploration" type="room_exploration_client" name="room_exploration_client" output="screen">
+<!--		<rosparam file="$(find roomba)/data/sim_data/meeting.yaml" command="load" />-->
+		<param name="robot_radius" value="$(arg robot_radius)"/>
+		<param name="coverage_radius" value="$(arg coverage_radius)"/>
+		<param name="use_test_maps" value="$(arg use_test_maps)"/>
+		<param name="abs_map_path" value="$(find roomba)/data/sim_data/meeting.png"/>
+	</node>
+
+</launch>
