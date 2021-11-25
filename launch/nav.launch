@@ -1,0 +1,29 @@
+<launch>
+
+   <master auto="start"/>
+    <param name="/use_sim_time" value="true"/>
+
+    <!-- Run the map server -->
+    <!--node name="map_server" pkg="map_server" type="map_server" args="$(find socspioneer)/data/meeting.yaml"/-->
+
+    <!-- SLAM package: Publish period adjusted to silence errors (change it and see for yourself) -->
+    <node name="slam" pkg="gmapping" type="slam_gmapping" args="scan:=base_scan">
+        <param name="transform_publish_period" value="1"/>
+    </node>
+
+    <!-- Visualizer and simulator -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/launch/nav.rviz"/>
+    <node name="stage" pkg="stage_ros" type="stageros" args="--clock $(find socspioneer)/data/meeting.world"/>
+
+    <!--- Run AMCL -->
+    <!--node name="amcl" pkg="amcl" type="amcl" args="scan:=base_scan"/-->
+
+   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <rosparam file="$(find roomba)/launch/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find roomba)/launch/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find roomba)/launch/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find roomba)/launch/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find roomba)/launch/base_local_planner_params.yaml" command="load" />
+ </node>
+
+</launch>
