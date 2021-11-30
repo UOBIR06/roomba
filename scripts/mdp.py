@@ -1,3 +1,5 @@
+
+from nav_msgs.msg import OccupancyGrid
 class Node:
     values = {}
 
@@ -64,4 +66,11 @@ class Node:
         pass
 
     def distance_to_battery(self, s, s_p) -> int: # battery level 0-100
+        pass
+
+
+    def get_init_map(self) -> OccupancyGrid:
+        pass
+
+    def get_segmented_map(self, map:OccupancyGrid ) -> list: # list of [{centre, area, id}]
         pass
