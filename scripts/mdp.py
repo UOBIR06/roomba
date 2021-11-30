@@ -10,7 +10,7 @@ class Node:
                 for s in self.values:
                     a = self.policy_get(s)
                     states = self.possible_tx(s, action)
-                    
+
                     prev_value = self.values.get(s, 0)
                     total = 0
                     for p in states:
@@ -22,7 +22,7 @@ class Node:
             # Policy Improvement
             for s in self.values:
                 old_action = self.policy_get(s)
-                
+
                 max_val = math.inf
                 best_action = None
                 for a in self.actions:
@@ -40,14 +40,28 @@ class Node:
             if stable:
                 return
 
-    def policy_get(self, s):
+    def policy_get(self, s) -> int: # n for clean room ; -1 for recharge
         # Return action for state s
+        pass
 
-    def policy_set(self, s, a):
+    def policy_set(self, s, a) -> int :# n for clean room ; -1 for recharge
         # Set action for state s as a
+        pass
 
-    def possible_tx(self, s, a):
+    def possible_tx(self, s, a) -> s:
         # Return possible states given we start in s and take action a
+        pass
 
-    def reward(self, s, a, p):
+    def reward(self, s, a, p) -> int:
         # Return reward
+        pass
+
+
+    def state_to_area(self, s) -> float: # areas or distance inside room s
+        pass
+
+    def distance_between_states(self, s1, s2) -> float: # distance
+        pass
+
+    def distance_to_battery(self, s, s_p) -> int: # battery level 0-100
+        pass
