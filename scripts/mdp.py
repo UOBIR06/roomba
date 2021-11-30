@@ -1,4 +1,4 @@
-
+import math
 from nav_msgs.msg import OccupancyGrid
 class Node:
     values = {}
@@ -55,8 +55,25 @@ class Node:
         pass
 
     def reward(self, s, a, p) -> int:
-        # Return reward
-        pass
+        reward = 0
+	    #penalise actions which would leave the robot stranded
+        if (next.canReturntoCharge() == False):
+            reward -= math.inf
+	    #incentivise more clean rooms
+	    if next.noOfCleanRooms > s.noOfCleanRooms:
+		    reward += 50
+	    #add battery level to reward, seek to conserve bettery
+	    reward += next[-1]
+	    #penalise outcomes which result in the robot moving further away from its current state
+	    reward -= distance_between_states(self, state[-2], next[-2])
+	    return reward
+
+    def noOfCleanrooms(s):
+            cleanrooms = 0
+            for i in range(0, len(s)-2):
+                cleanrooms += s[i]
+            return cleanrooms
+
 
 
     def state_to_area(self, s) -> float: # areas or distance inside room s
