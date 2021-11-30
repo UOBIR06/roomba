@@ -28,14 +28,14 @@
     <!--node name="explore" pkg="roomba" type="explore.py"/-->
 
     <!-- Teleop (for convenience) -->
-    <include file="$(find socspioneer)/launch/keyboard_teleop.launch"/>
+    <!--include file="$(find socspioneer)/launch/keyboard_teleop.launch"/-->
 
     <!-- Navigation stack setup -->
-    <!--node name="nav" pkg="move_base" type="move_base" respawn="false" output="screen">
-        <rosparam file="$(find roomba)/launch/costmap_common.yaml" command="load" ns="global_costmap"/>
-        <rosparam file="$(find roomba)/launch/costmap_common.yaml" command="load" ns="local_costmap"/>
-        <rosparam file="$(find roomba)/launch/local_costmap.yaml" command="load"/> 
-        <rosparam file="$(find roomba)/launch/global_costmap.yaml" command="load"/>
-        <rosparam file="$(find roomba)/launch/base_local_planner.yaml" command="load"/> 
-    </node-->
+    <node name="nav" pkg="move_base" type="move_base" respawn="false" output="screen">
+        <rosparam file="$(find roomba)/launch/costmap_common_params.yaml" command="load" ns="global_costmap"/>
+        <rosparam file="$(find roomba)/launch/costmap_common_params.yaml" command="load" ns="local_costmap"/>
+        <rosparam file="$(find roomba)/launch/local_costmap_params.yaml" command="load"/>
+        <rosparam file="$(find roomba)/launch/global_costmap_params.yaml" command="load"/>
+        <rosparam file="$(find roomba)/launch/base_local_planner_params.yaml" command="load"/>
+    </node>
 </launch>
