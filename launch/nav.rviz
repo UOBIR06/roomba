@@ -189,8 +189,8 @@ Visualization Manager:
       Marker Topic: /marker
       Name: Marker
       Namespaces:
-        {}
-      Queue Size: 100
+        point: true
+      Queue Size: 1000
       Value: true
   Enabled: true
   Global Options:
@@ -220,7 +220,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 11.996207237243652
+      Distance: 6.330782413482666
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

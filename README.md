@@ -25,9 +25,13 @@ catkin_make
 # demo of room_exploration given png map
 roslaunch roomba room_exploration.launch
 ```
-
+```bash
+# demo of frontier exploration
+roslaunch roomba nav.launch
+rosrun roomba explore.py
+```
 ## practice
-when pushlish/subscribe topics only used for this program. use `/roomba/` namespace to avoid conflicts.
+when publish/subscribe topics only used for this program. use `/roomba/` namespace to avoid conflicts.
 
 [comment]: <> (#### In simulated world:)
 
