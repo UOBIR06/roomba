@@ -3,26 +3,36 @@
 
     <!-- Visualizer and simulator -->
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/room_explore.rviz"/>
-    <!--    <node name="stage" pkg="stage_ros" type="stageros" args="&#45;&#45;clock $(find roomba)/data/sim_data/meeting.world"/>-->
+    <!--    <node name="stage" pkg="stage_ros" type="stageros" args="-clock $(find roomba)/data/sim_data/meeting.world"/>-->
     <!--rosrun map_server map_server src/pf_localisation/data/sim_data/meeting.yaml -->
-    <node name="map_server" pkg="map_server" type="map_server" args="$(find pf_localisation)/data/sim_data/meeting.yaml" />
+    <node name="map_server" pkg="map_server" type="map_server" args="$(find roomba)/data/sim_data/meeting.yaml" />
 
-    <!-- room exploration server node -->
-    <node ns="room_exploration" pkg="ipa_room_exploration" type="room_exploration_server" name="room_exploration_server" output="screen" respawn="true" respawn_delay="2">
-        <rosparam command="load" file="$(find roomba)/data/param/room_exploration_action_server_params.yaml"/>
+    <!-- room_segmentation -->
+    <node ns="room_segmentation" pkg="ipa_room_segmentation" type="room_segmentation_server" name="room_segmentation_server" output="screen" respawn="true" respawn_delay="2">
+        <rosparam command="load" file="$(find roomba)/data/param/room_segmentation_action_server_params.yaml"/>
     </node>
 
-    <!-- room exploration client node -->
-    <arg name="robot_radius" default="0.5"/>
-    <arg name="coverage_radius" default="0.5"/>
-    <arg name="use_test_maps" default="true"/>
+    <node ns="roomba" pkg="roomba" type="segmentation.py" name="room_segmentation" output="screen"/>
 
-    <node ns="room_exploration" pkg="ipa_room_exploration" type="room_exploration_client" name="room_exploration_client" output="screen">
-        <!--<rosparam file="$(find roomba)/data/sim_data/meeting.yaml" command="load" />-->
-        <param name="robot_radius" value="$(arg robot_radius)"/>
-        <param name="coverage_radius" value="$(arg coverage_radius)"/>
-        <param name="use_test_maps" value="$(arg use_test_maps)"/>
-        <param name="abs_map_path" value="$(find roomba)/data/sim_data/meeting.png"/>
-    </node>
+
+<!--<node name="pf_mcl" pkg="pf_localisation" type="node.py" output="screen"/>-->
+<!--    &lt;!&ndash; room exploration server node &ndash;&gt;-->
+<!--    <node ns="room_exploration" pkg="ipa_room_exploration" type="room_exploration_server" name="room_exploration_server" output="screen" respawn="true" respawn_delay="2">-->
+<!--        <rosparam command="load" file="$(find roomba)/data/param/room_exploration_action_server_params.yaml"/>-->
+<!--    </node>-->
+
+<!--    &lt;!&ndash; room exploration client node &ndash;&gt;-->
+<!--    <arg name="robot_radius" default="0.5"/>-->
+<!--    <arg name="coverage_radius" default="0.5"/>-->
+<!--    <arg name="use_test_maps" default="true"/>-->
+
+<!--    <node ns="room_exploration" pkg="ipa_room_exploration" type="room_exploration_client" name="room_exploration_client" output="screen">-->
+<!--        &lt;!&ndash;<rosparam file="$(find roomba)/data/sim_data/meeting.yaml" command="load" />&ndash;&gt;-->
+<!--        <param name="robot_radius" value="$(arg robot_radius)"/>-->
+<!--        <param name="coverage_radius" value="$(arg coverage_radius)"/>-->
+<!--        <param name="use_test_maps" value="$(arg use_test_maps)"/>-->
+<!--        <param name="abs_map_path" value="$(find roomba)/data/sim_data/meeting.png"/>-->
+<!--    </node>-->
+
 
 </launch>

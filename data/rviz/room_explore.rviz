@@ -6,7 +6,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /Path1
         - /Map1
+        - /Map2
       Splitter Ratio: 0.5
     Tree Height: 539
   - Class: rviz/Selection
@@ -87,6 +89,16 @@ Visualization Manager:
       Unreliable: false
       Use Timestamp: false
       Value: true
+    - Alpha: 0.699999988079071
+      Class: rviz/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic: /room_segmentation/room_segmentation_server/segmented_map
+      Unreliable: false
+      Use Timestamp: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -115,7 +127,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 67.40359497070312
+      Distance: 93.19424438476562
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -131,9 +143,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.785398006439209
+      Pitch: 1.0453977584838867
       Target Frame: <Fixed Frame>
-      Yaw: 0.785398006439209
+      Yaw: 0.08539818972349167
     Saved: ~
 Window Geometry:
   Displays:

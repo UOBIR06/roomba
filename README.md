@@ -19,6 +19,7 @@ rosdep install --from-paths src --ignore-src
 rosdep install roomba
 cd <catkin_ws>
 catkin_make
+catkin_make --pkg ipa_room_segmentation
 ```
 
 ```bash
