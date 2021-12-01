@@ -1,5 +1,10 @@
+#!/usr/bin/python3
+
 import math
 from nav_msgs.msg import OccupancyGrid
+from ipa_building_msgs.msg import MapSegmentationResult
+
+
 class Node:
     values = {}
 
@@ -56,38 +61,35 @@ class Node:
 
     def reward(self, s, a, p) -> int:
         reward = 0
-	    #penalise actions which would leave the robot stranded
+        # penalise actions which would leave the robot stranded
         if (next.canReturntoCharge() == False):
             reward -= math.inf
-	    #incentivise more clean rooms
-	    if next.noOfCleanRooms > s.noOfCleanRooms:
-		    reward += 50
-	    #add battery level to reward, seek to conserve bettery
-	    reward += next[-1]
-	    #penalise outcomes which result in the robot moving further away from its current state
-	    reward -= distance_between_states(self, state[-2], next[-2])
-	    return reward
+            # incentivise more clean rooms
+            if next.noOfCleanRooms > s.noOfCleanRooms:
+                reward += 50
+            # add battery level to reward, seek to conserve bettery
+            reward += next[-1]
+            # penalise outcomes which result in the robot moving further away from its current state
+            reward -= distance_between_states(self, state[-2], next[-2])
+            return reward
 
     def noOfCleanrooms(s):
-            cleanrooms = 0
-            for i in range(0, len(s)-2):
-                cleanrooms += s[i]
-            return cleanrooms
+        cleanrooms = 0
+        for i in range(0, len(s) - 2):
+            cleanrooms += s[i]
+        return cleanrooms
 
-
-
-    def state_to_area(self, s) -> float: # areas or distance inside room s
+    def state_to_area(self, s) -> float:  # areas or distance inside room s
         pass
 
-    def distance_between_states(self, s1, s2) -> float: # distance
+    def distance_between_states(self, s1, s2) -> float:  # distance
         pass
 
-    def distance_to_battery(self, s, s_p) -> int: # battery level 0-100
+    def distance_to_battery(self, s, s_p) -> int:  # battery level 0-100
         pass
-
 
     def get_init_map(self) -> OccupancyGrid:
         pass
 
-    def get_segmented_map(self, map:OccupancyGrid ) -> list: # list of [{centre, area, id}]
+    def get_segmented_map(self, map: OccupancyGrid) -> MapSegmentationResult:  # list of [{centre, area, id}]
         pass
