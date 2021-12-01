@@ -44,10 +44,11 @@ class RoomIPA(object):
         # DynamicReconfigureClient
         self.drc = dynamic_reconfigure.client.Client('/room_segmentation/room_segmentation_server')
         self.drc.update_configuration({"room_segmentation_algorithm": 3})
-        self.send_goal_to_segemantation()
+        # self.send_goal_to_segemantation()
 
-    def send_goal_to_segemantation(self, goal: MapSegmentationGoal = None) -> MapSegmentationResult:
-        img_path = os.path.join(rospkg.RosPack().get_path('roomba'), 'data/sim_data/meeting.png')
+    def send_goal_to_segemantation(self, goal: MapSegmentationGoal = None, img_path: str = '') -> MapSegmentationResult:
+        if not img_path:
+            img_path = os.path.join(rospkg.RosPack().get_path('roomba'), 'data/sim_data/meeting.png')
         map_img: SensorImage = util.setup_image(img_path)
 
         # testing:

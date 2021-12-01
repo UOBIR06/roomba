@@ -1,12 +1,17 @@
 #!/usr/bin/python3
 
+import os
+import rospkg
 import math
 from nav_msgs.msg import OccupancyGrid
 from ipa_building_msgs.msg import MapSegmentationResult
+from segmentation import RoomIPA
 
 
-class Node:
-    values = {}
+class Node(object):
+    def __init__(self):
+        self.values = {}
+        self._segmentation_step = RoomIPA()
 
     def policy_iteration(self):
         while True:
@@ -70,7 +75,7 @@ class Node:
             # add battery level to reward, seek to conserve bettery
             reward += next[-1]
             # penalise outcomes which result in the robot moving further away from its current state
-            reward -= distance_between_states(self, state[-2], next[-2])
+            reward -= self.distance_between_states(self, state[-2], next[-2])
             return reward
 
     def noOfCleanrooms(s):
@@ -91,5 +96,8 @@ class Node:
     def get_init_map(self) -> OccupancyGrid:
         pass
 
-    def get_segmented_map(self, map: OccupancyGrid) -> MapSegmentationResult:  # list of [{centre, area, id}]
-        pass
+    def get_segmented_map(self, img_path: str) -> MapSegmentationResult:  # list of [{centre, area, id}]
+        # TODO read from OccupancyGrid instead of png file
+        # img_path = os.path.join(rospkg.RosPack().get_path('roomba'), 'data/sim_data/meeting.png')
+        res: MapSegmentationResult = self._segmentation_step.send_goal_to_segemantation(img_path=img_path)
+        return res
