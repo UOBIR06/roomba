@@ -16,7 +16,7 @@ cd <catkin_ws>/src
 git clone https://github.com/UOBIR06/ipa_coverage_planning.git  # on dev branch
 rosdep update
 rosdep install --from-paths src --ignore-src
-rosdep install roomba
+#rosdep install roomba
 cd <catkin_ws>
 catkin_make
 catkin_make --pkg ipa_room_segmentation

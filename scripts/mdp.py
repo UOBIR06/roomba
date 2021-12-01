@@ -4,14 +4,14 @@ import os
 import rospkg
 import math
 from nav_msgs.msg import OccupancyGrid
-from ipa_building_msgs.msg import MapSegmentationResult
-from segmentation import RoomIPA
+from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult
+from room_ipa import RoomIPA
 
 
 class Node(object):
     def __init__(self):
         self.values = {}
-        self._segmentation_step = RoomIPA()
+        self._room_ipa = RoomIPA()
 
     def policy_iteration(self):
         while True:
@@ -99,5 +99,10 @@ class Node(object):
     def get_segmented_map(self, img_path: str) -> MapSegmentationResult:  # list of [{centre, area, id}]
         # TODO read from OccupancyGrid instead of png file
         # img_path = os.path.join(rospkg.RosPack().get_path('roomba'), 'data/sim_data/meeting.png')
-        res: MapSegmentationResult = self._segmentation_step.send_goal_to_segemantation(img_path=img_path)
+        res: MapSegmentationResult = self._room_ipa.send_goal_to_segemantation(img_path=img_path)
+        return res
+
+    def do_sweeping(self, img_path: str) -> RoomExplorationResult:
+        # TODO use segments from get_segmented_map as inputs
+        res: RoomExplorationResult = self._room_ipa.send_goal_to_exploration(img_path=img_path)
         return res
