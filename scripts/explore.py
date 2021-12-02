@@ -6,8 +6,8 @@ import rospy
 import actionlib
 from typing import *
 from threading import Lock
-from src.roomba.src.frontier import Frontier
-from src.roomba.src.util import *
+from src.frontier import Frontier
+from src.util import *
 
 from nav_msgs.msg import *
 from geometry_msgs.msg import *
