@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import os
 import rospy
 import datetime
 from nav_msgs.msg import OccupancyGrid
@@ -20,11 +21,12 @@ class Coverage(object):
         for t, d in self.data:
             output += f'{t},{d}\n'
 
-        date = datetime.date.today()
-        filename = date.strftime("%y-%m-%d_%h-%M-%s")
-        with open(f'~/catkin_ws/src/roomba/data/{filename}.csv', 'w') as f:
+        date = datetime.datetime.now()
+        filename = date.strftime("%y-%m-%d_%H-%M-%S")
+        home = os.environ['HOME']
+        with open(f'{home}/catkin_ws/src/roomba/data/{filename}.csv', 'w') as f:
             f.write(output)
-            rospy.loginfo(f'Wrote output to {f}')
+            rospy.loginfo(f'Wrote output to {f.name}')
 
 
 if __name__ == "__main__":

@@ -4,7 +4,9 @@ import tf
 import math
 import rospy
 import actionlib
-from roomba.frontier import *
+from roomba.heap import Heap
+from roomba.frontier import Frontier
+from roomba.util import rotateQuaternion
 from typing import *
 from threading import Lock
 from nav_msgs.msg import *
