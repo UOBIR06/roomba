@@ -8,11 +8,12 @@ Package setup and dependencies:
 ```bash
 cd <catkin_ws>/src
 git clone https://github.com/UOBIR06/ipa_coverage_planning.git  # on dev branch
+# or for ssh:  git clone git@github.com:UOBIR06/ipa_coverage_planning.git
 rosdep update
 rosdep install --from-paths src --ignore-src
 #rosdep install roomba
 cd <catkin_ws>
-catkin_make
+catkin_make # need to do this each time you pull from ipa_coverage_planning cuz it's wirtten in c++
 catkin_make --pkg ipa_room_segmentation
 ```
 
