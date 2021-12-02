@@ -4,7 +4,7 @@ import tf
 import math
 import rospy
 import actionlib
-from roomba import *
+from roomba.frontier import *
 from typing import *
 from threading import Lock
 from nav_msgs.msg import *

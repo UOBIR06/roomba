@@ -30,6 +30,8 @@ class MDP(object):
         self.actions = []
         self.gamma = 0.8  # TODO: Tweak this
         self._room_ipa = RoomIPA()
+        self.get_segmented_map(img_path='')
+        self.do_sweeping(img_path='')
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3

@@ -123,7 +123,7 @@ def setup_image(image_path):
     black = np.where(img[:, :] < 250)
     white = np.where(img[:, :] >= 250)
 
-    # Turn black pixels to white and vice versa
+    # Turn img to black and white
     img[black] = (0,)
     img[white] = (255,)
 

@@ -4,6 +4,7 @@
 @author ir06
 @date 23/11/2021
 """
+import sys
 import os
 import actionlib
 import rospy
@@ -74,9 +75,9 @@ class RoomIPA(object):
             goal.robot_radius = 0.4
 
         rospy.loginfo("waiting for result")
-        finished_before_timeout = self._sac_seg.send_goal_and_wait(goal)
-        response = self._sac_seg.get_result()
-        rospy.loginfo("..........result.................", finished_before_timeout)
+        self._sac_seg.send_goal_and_wait(goal)
+        response: MapSegmentationResult = self._sac_seg.get_result()
+        rospy.loginfo("..........result................." + str(response.room_information_in_pixel))
         return response
 
     def send_goal_to_exploration(self, goal: RoomExplorationGoal = None, img_path: str = '') -> RoomExplorationResult:
@@ -98,9 +99,9 @@ class RoomIPA(object):
             # goal.planning_mode
 
         rospy.loginfo("waiting for result")
-        finished_before_timeout = self._sac_exp.send_goal_and_wait(goal)
+        self._sac_exp.send_goal_and_wait(goal)
         response: RoomExplorationResult = self._sac_exp.get_result()
-        rospy.loginfo("Got a path with "+ str(len(response.coverage_path))+" nodes.")
+        rospy.loginfo("Got a path with " + str(len(response.coverage_path)) + " nodes.")
         return response
 
     def segmented_map_cb(self, args):
