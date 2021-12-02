@@ -12,7 +12,7 @@
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/launch/nav.rviz"/>
     <node name="stage" pkg="stage_ros" type="stageros" args="--clock $(find socspioneer)/data/meeting.world"/>
 
-    <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <node pkg="move_base" type="move_base" name="move_base" output="screen">
         <rosparam file="$(find roomba)/launch/costmap_common_params.yaml" command="load" ns="local_costmap"/>
         <rosparam file="$(find roomba)/launch/costmap_common_params.yaml" command="load" ns="global_costmap"/>
     

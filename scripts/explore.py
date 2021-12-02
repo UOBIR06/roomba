@@ -1,18 +1,17 @@
 #!/usr/bin/python3
-import nav_msgs.srv
+
 import tf
 import math
 import rospy
 import actionlib
+from roomba import *
 from typing import *
 from threading import Lock
-from src.frontier import Frontier
-from src.util import *
-
 from nav_msgs.msg import *
 from geometry_msgs.msg import *
 from move_base_msgs.msg import *
 from actionlib_msgs.msg import *
+from map_msgs.msg import OccupancyGridUpdate
 from visualization_msgs.msg import Marker
 
 
@@ -29,9 +28,9 @@ class Explorer(object):
         self.data = None  # Occupancy data
         self.visit = None  # Visited cell dictionary, for convenience
         self.prev_goal = None  # Last goal that was set
-        self.reached = False
         self.prev_dist = math.inf  # Previous goal distance
         self.prev_time = None  # Last time we got feedback
+        self.reached = False
         self.blacklist = []  # Banned frontiers b/c they're unreachable
         self.lock = Lock()  # For mutating the map structure(s)
 
@@ -41,11 +40,14 @@ class Explorer(object):
 
         # Setup ROS hooks
         self.tf = tf.TransformListener()
+        #self.map_sub = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.map_callback)
+        #self.update_sub = rospy.Subscriber('/move_base/global_costmap/costmap_updates', OccupancyGridUpdate, self.update_callback)
         self.map_sub = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=100)
         self.mark_pub = rospy.Publisher('/marker', Marker, queue_size=1000)
         self.pose_pub = rospy.Publisher('/estimatedpose', PoseStamped, queue_size=1)
         self.signal = rospy.Publisher('/roomba/map_ready', OccupancyGrid, queue_size=1)
+        #self.pathsrv = rospy.ServiceProxy('move_base', nav_msgs.srv.GetPlan, True)
         self.point_id = 0
 
         # Setup actionlib & path service
@@ -55,6 +57,49 @@ class Explorer(object):
         # Do a little spin to start
         self.do_spin()
         self.timer = rospy.Timer(rospy.Duration(1), lambda e: self.plan())
+
+    def find_path(self, start: tuple, goal: tuple) -> Optional[list]:
+        """Find a path between two points on the map."""
+
+        # Heuristic function
+        def h(pt: tuple) -> float:
+            dx = pt[0] - start[0]
+            dy = pt[1] - start[1]
+            return math.sqrt(dx**2 + dy**2)
+
+        def reconstruct(m: dict, s: tuple) -> list:
+            path = []
+            while s in camefrom:
+                # DEBUG: Show path
+                wx, wy = self.map_to_world(*s)
+                self.mark_point(wx, wy, (1, 0, 0), 0.05)
+
+                s = camefrom[s]
+                path.append(s)
+            return path
+
+        heap = Heap()
+        heap.push(start, h(start))
+        gscore = {start: 0}
+        camefrom = {}
+
+        while heap:
+            current = heap.pop()
+            if current == goal:
+                return reconstruct(camefrom, current)
+
+            score = gscore.get(current) + 1  # All neighbours are just one cell away
+            for n in self.nhood_8(*current):
+                if self.get_cell(*n) > 0:
+                    continue  # Ignore occupied cells
+
+                if score < gscore.get(n, math.inf):
+                    camefrom[n] = current
+                    gscore[n] = score
+                    if not heap.has(n):
+                        heap.push(n, score + h(n))
+
+        return None
 
     def build_frontier(self, x: int, y: int, ref: Pose) -> Frontier:
         """Given a starting UKNW_CELL, build a frontier of connected cells."""
@@ -95,6 +140,12 @@ class Explorer(object):
         if x < 0 or y < 0 or x >= self.info.width or y >= self.info.height:
             raise IndexError(f'Index <{x}, {y}> is out of bounds')
         return self.data[x + y * self.info.width]
+
+    def get_index(self, x: int, y: int) -> int:
+        return x + y * self.info.width
+
+    def index_to_map(self, i: int) -> tuple:
+        return divmod(i, self.info.height)
 
     def world_to_map(self, wx: int, wy: int) -> Optional[tuple]:
         """Convert world coordinates ('/map' frame) to cell indexes."""
@@ -209,6 +260,11 @@ class Explorer(object):
             self.info = msg.info
             self.data = msg.data
 
+    def update_callback(self, msg: OccupancyGridUpdate):
+        """Update map (with costmap update)."""
+        with self.lock:
+            self.data = msg.data
+
     def get_pose(self) -> Optional[Pose]:
         """Get estimated robot pose."""
 
@@ -242,7 +298,7 @@ class Explorer(object):
             # Find nearest free cell to start search
             n_index = self.nearest_free(*w_index)
             if not n_index:
-                rospy.logwarn('Could not find an empty cell nearby to start search')
+                rospy.logwarn('Could not find an empty cell nearby')
                 n_index = w_index
 
             # DEBUG: Publish starting point
@@ -274,7 +330,31 @@ class Explorer(object):
                         f = self.build_frontier(nx, ny, pose)
                         if f.size < self.min_size:
                             continue  # Reject small frontiers
-                        # FIXME: Can't use service to ask for path plan
+
+                        # try:
+                        #     start = PoseStamped()
+                        #     start.header.frame_id = 'map'
+                        #     start.pose = pose
+                        #
+                        #     end = PoseStamped()
+                        #     end.header.frame_id = 'map'
+                        #     end.pose = Pose(f.centre, Quaternion(0, 0, 0, 1))
+                        #
+                        #     resp = self.pathsrv(start, end, 0)
+                        # except Exception as e:
+                        #     rospy.logwarn(f'Path service returned error: {e}')
+                        #     continue
+                        #
+                        # if not resp.plan.poses:
+                        #     continue  # No path found
+                        # f.path = resp.plan
+
+                        # start = self.world_to_map(pose.position.x, pose.position.y)
+                        # goal = self.world_to_map(f.centre.x, f.centre.y)
+                        # f.path = self.find_path(start, goal)
+                        # if not f.path:
+                        #    continue
+
                         frontiers.append(f)
 
         # Sort and filter frontiers
@@ -282,13 +362,15 @@ class Explorer(object):
         return list(filter(lambda k: self.is_allowed(k.centre), frontiers))
 
     def goal_reached(self, status: GoalStatus, msg: MoveBaseResult):
-        rospy.loginfo(f'Reached goal: {msg}')
+        rospy.loginfo(f'Reached goal: <{self.prev_goal.x}, {self.prev_goal.y}>')
         if status == actionlib.GoalStatus.ABORTED:
             self.blacklist.append(self.prev_goal)
         self.reached = True
 
     def do_spin(self):
         """Do a (roughly) full spin."""
+        rospy.loginfo('Spinning...')
+
         hz = 10
         step = 1.0  # rad/s
         full_time = (2 * math.pi) / step
@@ -305,6 +387,7 @@ class Explorer(object):
             count += 1
 
     def send_goal(self, x: float, y: float, t: float):
+        rospy.loginfo(f'New goal: <{x}, {y}>')
         goal = MoveBaseGoal()
         goal.target_pose.pose.position = Point(x, y, 0)
         goal.target_pose.pose.orientation = rotateQuaternion(Quaternion(0, 0, 0, 1), t)
@@ -330,20 +413,27 @@ class Explorer(object):
         frontiers = self.find_frontiers(pose)
         if not frontiers:
             rospy.loginfo('No frontiers found, are we done?')
+            self.timer.shutdown()
 
             # Go back to charging station (origin)
             self.send_goal(0, 0, 0)
-            self.signal.publish(self.data)
-            self.timer.shutdown()
+
+            # Signal next node
+            msg = OccupancyGrid()
+            msg.header.frame_id = 'map'
+            msg.header.stamp = rospy.Time()
+            msg.info = self.info
+            msg.data = self.data
+            self.signal.publish(msg)
+
+            # Quit
             sys.exit(0)
 
         # DEBUG: Draw frontiers
         self.clear_marks()
-        blue = 1 / len(frontiers)
         for f in frontiers:
             for pt in f.points:
-                self.mark_point(pt.x, pt.y, (1, 0, blue), 0.05)
-            blue += 1 / len(frontiers)
+                self.mark_point(pt.x, pt.y, (0, 0, 1), 0.05)
             self.mark_point(f.centre.x, f.centre.y, (0, 1, 0), 0.10)
 
         # New goal or made progress
@@ -357,25 +447,26 @@ class Explorer(object):
             self.prev_dist = f.distance
 
         # Timeout if no progress in a while
-        if rospy.get_time() - self.prev_time > self.timeout:
+        delta_time = rospy.get_time() - self.prev_time
+        if delta_time > self.timeout:
             self.blacklist.append(goal)
-            rospy.loginfo(f'Frontier at {goal} has been blacklisted')
+            rospy.loginfo(f'Blacklisted: <{goal.x}, {goal.y}>')
             self.plan()
             return
 
         # Still pursuing previous goal
         if same:
-            if self.reached and rospy.get_time() - self.prev_time > self.timeout / 2:
-                self.reached = False
+            if self.reached and delta_time > self.timeout / 2:
                 self.do_spin()
+                self.reached = False
             return
 
         # Send goal to move_base
         dx = goal.x - pose.position.x
         dy = goal.y - pose.position.y
         angle = math.atan2(dy, dx)
-        self.send_goal(goal.x, goal.y, angle)
         self.reached = False
+        self.send_goal(goal.x, goal.y, angle)
 
 
 if __name__ == '__main__':

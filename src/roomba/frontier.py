@@ -1,6 +1,6 @@
 import math
 from geometry_msgs.msg import Point, Pose 
-from src.roomba.src.util import getHeading
+from roomba.util import getHeading
 
 
 class Frontier:
@@ -14,6 +14,7 @@ class Frontier:
         self.centre = Point(0, 0, 0)
         self.cost = math.inf
         self.points = []
+        self.path = None
         self.reference = Pose()
 
     def get_cost(self) -> float:

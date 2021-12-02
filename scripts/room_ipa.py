@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+
 """
 @author ir06
 @date 23/11/2021
@@ -12,9 +13,9 @@ from ipa_building_msgs.msg import MapSegmentationAction, MapSegmentationGoal, Ma
     RoomExplorationAction, RoomExplorationGoal, RoomExplorationResult
 import dynamic_reconfigure.client
 from nav_msgs.msg import OccupancyGrid, Path
-from geometry_msgs.msg import Pose, Pose2D
+from geometry_msgs.msg import Pose2D
 from sensor_msgs.msg import Image as SensorImage
-from src.roomba.src import util
+from roomba import util
 
 
 class RoomIPA(object):
