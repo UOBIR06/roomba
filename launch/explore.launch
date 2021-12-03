@@ -7,6 +7,7 @@
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/launch/default.rviz"/>
     <node name="stage" pkg="stage_ros" type="stageros" args="--clock $(find socspioneer)/data/meeting.world"/>
 
+    <include file="$(find roomba)/launch/room_exploration.launch" />
     <!-- Alternative SLAM package -->
     <!--node name="slam" pkg="hector_mapping" type="hector_mapping">
         <param name="pub_map_odom_transform" value="true"/>
