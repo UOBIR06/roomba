@@ -1,37 +1,41 @@
 #!/usr/bin/python3
 
 import os
+import struct
+import sys
 import rospkg
 import rospy
 import math
 import random
+from sensor_msgs.msg import Image
 from nav_msgs.msg import OccupancyGrid
-from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult
+from ipa_building_msgs.msg import MapSegmentationResult, MapSegmentationGoal, RoomExplorationResult
 from room_ipa import RoomIPA
 
 
 class MDP(object):
     def __init__(self):
-        # States are tuples: (pose, battery, r0, ..., rn)
+        # States are tuples: (r0, ..., rn, pose, battery)
+        #   r0, ..., rn : cleanliness state of room i
         #   pose : which room the robot is in, [0, n]
         #   battery : whole number, [0, 100]
-        #   r0, ..., rn : cleanliness state of room i
         #
         # The layout is like this, so it's easy to get:
-        #   pose = state[0]
-        #   battery = state[1]
-        #   ri = state[i + 2]
+        #   pose = state[-2]
+        #   battery = state[-1]
+        #   ri = state[i]
         self.values = {}
         self.policy = {}
 
         # TODO: Populate according to # of rooms + recharge
         #   -1 : recharge
         #   [0, inf] : clean room x
+        # Perhaps simpler to just use a number i.e self.actions = self.num_rooms
         self.actions = []
         self.gamma = 0.8  # TODO: Tweak this
-        self._room_ipa = RoomIPA()
-        self.get_segmented_map(img_path='')
-        self.do_sweeping(img_path='')
+        #self._room_ipa = RoomIPA()
+        #self.get_segmented_map(img_path='')
+        #self.do_sweeping(img_path='')
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3
@@ -72,7 +76,7 @@ class MDP(object):
     def bellman(self, s, a) -> float:
         # Calculate part of the bellman equation for a state and current policy
         # V(s) = sum_{s'} T(s' | s, a) [ r(s, a, s') + gamma * V(s') ]
-        # We forgo T(...) using `self.possible_tx` here.
+        # We forgo T(...) using `self.end_states` here.
         return sum([
             self.reward(s, a, e) + self.gamma * self.values.get(e, 0)
             for e in self.end_states(s, a)
@@ -135,5 +139,35 @@ class MDP(object):
 
 if __name__ == '__main__':
     rospy.init_node('mdp')
+
+    # Grab explored map when ready
+    msg = rospy.wait_for_message('/map', OccupancyGrid)
+
+    # Convert it to an image
+    data = bytes(map(lambda x: 255 if x == 0 else 0, msg.data))
+
+    # Stuff it inside a sensor_msgs/Image
+    img = Image()
+    img.width = msg.info.width
+    img.height = msg.info.height
+    img.encoding = '8UC1'
+    img.is_bigendian = (sys.byteorder == 'big')
+    img.step = img.width
+    img.data = data
+
+    # Now stuff the image inside a MapSegmentationGoal
+    goal = MapSegmentationGoal()
+    goal.input_map = img
+    goal.map_resolution = msg.info.resolution
+    goal.map_origin = msg.info.origin
+    goal.return_format_in_pixel = False
+    goal.return_format_in_meter = True
+    goal.robot_radius = 0.22  # Same as footprint
+    goal.room_segmentation_algorithm = 0
+
+    # Call segmentation server
+    client = RoomIPA()  # TODO: Yanrong, can you use the code above?
+    reply = client.send_goal_to_segemantation(goal)
+
     mdp = MDP()
     rospy.spin()
