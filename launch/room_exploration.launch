@@ -1,14 +1,15 @@
 <?xml version="1.0"?>
 <launch>
 
-    <!-- Visualizer and simulator -->
-    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/room_explore.rviz"/>
-    <!--    <node name="stage" pkg="stage_ros" type="stageros" args="-clock $(find roomba)/data/sim_data/meeting.world"/>-->
-    <!--rosrun map_server map_server src/pf_localisation/data/sim_data/meeting.yaml -->
-<!-- <node name="map_server" pkg="map_server" type="map_server" args="$(find roomba)/data/sim_data/meeting.yaml" />
-    <node name="map_server2" pkg="map_server" type="map_server" args="$(find roomba)/data/sim_data/meeting.yaml">
-        <remap from="/map" to="/roomba/map_ready" />
-    </node> -->
+<!--    &lt;!&ndash; Visualizer and simulator &ndash;&gt;-->
+<!--    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/room_explore.rviz"/>-->
+<!--    &lt;!&ndash;    <node name="stage" pkg="stage_ros" type="stageros" args="-clock $(find roomba)/data/sim_data/meeting.world"/>&ndash;&gt;-->
+<!--    &lt;!&ndash;rosrun map_server map_server src/pf_localisation/data/sim_data/meeting.yaml &ndash;&gt;-->
+<!--    <node name="map_server" pkg="map_server" type="map_server" args="$(find roomba)/data/sim_data/meeting.yaml" />-->
+<!--    &lt;!&ndash; for test &ndash;&gt;-->
+<!--    <node name="map_server2" pkg="map_server" type="map_server" args="$(find roomba)/data/sim_data/meeting.yaml">-->
+<!--        <remap from="/map" to="/roomba/map_ready" />-->
+<!--    </node>-->
 
     <!-- room_segmentation -->
     <node ns="room_segmentation" pkg="ipa_room_segmentation" type="room_segmentation_server" name="room_segmentation_server" output="screen" respawn="true" respawn_delay="2">
@@ -20,7 +21,7 @@
         <rosparam command="load" file="$(find roomba)/data/param/room_exploration_action_server_params.yaml"/>
     </node>
 
-<!-- TODO uncomment -->
+<!--    TODO uncomment -->
 <!--    <node ns="roomba" pkg="roomba" type="room_ipa.py" name="room_ipa" output="screen"/>-->
 
 </launch>
