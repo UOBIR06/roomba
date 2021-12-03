@@ -115,9 +115,11 @@ class MDP(object):
             cleanrooms += s[i]
         return cleanrooms
 
-    # @Yanrong will write it. including bettery used for clean room 'room_to_go' and battery used for go to there
-    # will not update self.battery. just do the estimation.
+    # @Yanrong will write it.
     def get_estimate_battery_left(self, room_in_now:int, room_to_go:int) -> int: # battery level 0-100
+        # including bettery used for clean room 'room_to_go' and battery used for go to there
+        # if you don't want the distance included, just pass room_in_now as room_to_go
+        # will not update self.battery. just do the estimation.
         pass
 
     def state_to_area(self, s) -> float:  # areas or distance inside room s
