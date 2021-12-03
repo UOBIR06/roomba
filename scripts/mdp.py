@@ -88,6 +88,38 @@ class MDP(object):
         ])
 
     def end_states(self, s, a) -> list:
+        possible_states = []
+        for state in self.values:
+            #In the case that action is to recharge..
+            if a == -1:
+                #Check that battery level of new state is greater than current
+                if (s[-1] < state[-1]):
+                    valid = True
+                    #check that the clean status of each room is exactly the same
+                    for i in range (0, len(s)-2):
+                        if s[i] != state[i]:
+                                #if any difference, valid flag raised
+                                valid = False
+                    if valid == True:
+                        possible_states.append(state)
+
+
+            # if robot is cleaning a room, only states with the 
+            # expected battery level after cleaning would be valid
+            elif (s[-1]  - self.battery_to_clean(a)) == state[-1]:
+                #check that each room apart from the one being cleaned 
+                #isn't in a different state of cleanliness
+                valid = True
+                for i in range (0, len(s)-2):
+                    if s[i] != state[i]:
+                        if i != a:
+                            valid = False
+                if valid == True:
+                    possible_states.append(state)
+
+
+
+
         # Pseudo transition function replacement.
         #
         # Returns the end states, s', which are possible
@@ -98,19 +130,20 @@ class MDP(object):
         #   when the action taken was to go recharge!
         pass
 
+    #reward function, determines how much the robot will value a given action
     def reward(self, s, a, p) -> int:
         reward = 0
         # penalise actions which would leave the robot stranded
-        if not next.canReturntoCharge():
+        if self.get_estimate_battery_left(s[-2], p[-2]) < self.distance_to_battery(s, self.battery_location):
             reward -= math.inf
-            # incentivise more clean rooms
-            if next.noOfCleanRooms > s.noOfCleanRooms:
-                reward += 50
-            # add battery level to reward, seek to conserve bettery
-            reward += next[-1]
-            # penalise outcomes which result in the robot moving further away from its current state
-            reward -= self.distance_between_states(self, state[-2], next[-2])
-            return reward
+        # incentivise more clean rooms
+        if self.noOfCleanRooms(p) > self.noOfCleanRooms(s):
+            reward += 50
+        # add battery level to reward, seek to conserve bettery
+        reward += p[-1]
+        # penalise outcomes which result in the robot moving further away from its current state
+        reward -= self.distance_between_states(self, s[-2], p[-2])
+        return reward
 
     def noOfCleanrooms(s):
         cleanrooms = 0
