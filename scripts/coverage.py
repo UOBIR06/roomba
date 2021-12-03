@@ -4,6 +4,7 @@ import os
 import rospy
 import datetime
 from nav_msgs.msg import OccupancyGrid
+from roomba import util
 
 
 class Coverage(object):
@@ -23,8 +24,7 @@ class Coverage(object):
 
         date = datetime.datetime.now()
         filename = date.strftime("%y-%m-%d_%H-%M-%S")
-        home = os.environ['HOME']
-        with open(f'{home}/catkin_ws/src/roomba/data/{filename}.csv', 'w') as f:
+        with open(os.path.join(util.HOME_ROOT, f'data/{filename}.csv'), 'w') as f:
             f.write(output)
             rospy.loginfo(f'Wrote output to {f.name}')
 

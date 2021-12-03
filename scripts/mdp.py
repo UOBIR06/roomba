@@ -3,14 +3,12 @@
 import os
 import struct
 import sys
-import rospkg
 import rospy
 import math
 import random
-from sensor_msgs.msg import Image
 from nav_msgs.msg import OccupancyGrid
 from ipa_building_msgs.msg import MapSegmentationResult, MapSegmentationGoal, RoomExplorationResult
-from room_ipa import RoomIPA
+from room_ipa import util
 
 
 class MDP(object):
@@ -35,9 +33,14 @@ class MDP(object):
         self.actions = []
         self.gamma = 0.8  # TODO: Tweak this
         self.battery_loss_rate = 0.01   # TODO: Tweak this
-        #self._room_ipa = RoomIPA()
-        #self.get_segmented_map(img_path='')
-        #self.do_sweeping(img_path='')
+
+        self._sub_segmented_map = rospy.Subscriber('/room_segmentation/room_segmentation_server/segmented_map',
+                                                   OccupancyGrid, self.get_segmented_map)
+        # self._sub_coverage_path = rospy.Subscriber('/room_exploration/room_exploration_server/coverage_path', Path,
+        #                                            self.coverage_path_cb)
+
+        self.rooms = []
+
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3
@@ -134,11 +137,8 @@ class MDP(object):
     def get_init_map(self) -> OccupancyGrid:
         pass
 
-    def get_segmented_map(self, img_path: str) -> MapSegmentationResult:  # list of [{centre, area, id}]
-        # TODO read from OccupancyGrid instead of png file
-        # img_path = os.path.join(rospkg.RosPack().get_path('roomba'), 'data/sim_data/meeting.png')
-        res: MapSegmentationResult = self._room_ipa.send_goal_to_segemantation(img_path=img_path)
-        return res
+    def get_segmented_map(self, reults: MapSegmentationResult) -> None:  # list of [{centre, area, id}]
+        self.rooms = reults # TODO not done, switching computers
 
     def do_sweeping(self, img_path: str) -> RoomExplorationResult:
         # TODO use segments from get_segmented_map as inputs
@@ -149,34 +149,24 @@ class MDP(object):
 if __name__ == '__main__':
     rospy.init_node('mdp')
 
+    # TODO @Mert I moved these back to room_ipa, and changed some structure, is it make more sense to you now?
     # Grab explored map when ready
-    msg = rospy.wait_for_message('/map', OccupancyGrid)
-
-    # Convert it to an image
-    data = bytes(map(lambda x: 255 if x == 0 else 0, msg.data))
-
-    # Stuff it inside a sensor_msgs/Image
-    img = Image()
-    img.width = msg.info.width
-    img.height = msg.info.height
-    img.encoding = '8UC1'
-    img.is_bigendian = (sys.byteorder == 'big')
-    img.step = img.width
-    img.data = data
+    # msg = rospy.wait_for_message('/map', OccupancyGrid)
+    # img = util.grid_to_sensor_image(msg)
 
     # Now stuff the image inside a MapSegmentationGoal
-    goal = MapSegmentationGoal()
-    goal.input_map = img
-    goal.map_resolution = msg.info.resolution
-    goal.map_origin = msg.info.origin
-    goal.return_format_in_pixel = False
-    goal.return_format_in_meter = True
-    goal.robot_radius = 0.22  # Same as footprint
-    goal.room_segmentation_algorithm = 0
+    # goal = MapSegmentationGoal()
+    # goal.input_map = img
+    # goal.map_resolution = msg.info.resolution
+    # goal.map_origin = msg.info.origin
+    # goal.return_format_in_pixel = False
+    # goal.return_format_in_meter = True
+    # goal.robot_radius = 0.22  # Same as footprint
+    # goal.room_segmentation_algorithm = 0
 
     # Call segmentation server
-    client = RoomIPA()  # TODO: Yanrong, can you use the code above?
-    reply = client.send_goal_to_segemantation(goal)
+    # client = RoomIPA()
+    # reply = client.send_goal_to_segemantation(goal)
 
     mdp = MDP()
     rospy.spin()

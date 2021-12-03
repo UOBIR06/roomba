@@ -1,14 +1,20 @@
 import math
 import os
 import time
+import sys
+import rospkg
 
 import cv2
 import cv_bridge
 import numpy as np
 import rospy
 from geometry_msgs.msg import Quaternion
-from numpy import ndarray
+from nav_msgs.msg import OccupancyGrid
+from sensor_msgs.msg import Image as SensorImage
 
+
+#global variables
+HOME_ROOT = rospkg.RosPack().get_path('roomba')
 
 def timed(fn):
     """ Decorator to time functions. For debugging time critical code """
@@ -128,3 +134,17 @@ def setup_image(image_path):
     img[white] = (255,)
 
     return cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="mono8")  # , encoding="mono8"
+
+def grid_to_sensor_image(map: OccupancyGrid) -> SensorImage: #mat feed into Image
+    # Convert it to an image
+    data = bytes(map(lambda x: 255 if x >=250 else 0, map.data))
+
+    # Stuff it inside a sensor_msgs/Image
+    img = SensorImage()
+    img.width = map.info.width
+    img.height = map.info.height
+    img.encoding = 'mono8'#'8UC1'
+    img.is_bigendian = (sys.byteorder == 'big')
+    img.step = img.width
+    img.data = data
+    return img
