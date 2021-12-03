@@ -21,19 +21,20 @@ from roomba import util
 
 class RoomIPA(object):
     def __init__(self):
-
-        self.last_map = None
-        self._sub_map = rospy.Subscriber('/roomba/map_ready', OccupancyGrid, self.map_ready_cb)
-
         # Get an action client
         self._sac_seg = actionlib.SimpleActionClient('/room_segmentation/room_segmentation_server',
                                                      MapSegmentationAction)
         self._sac_exp = actionlib.SimpleActionClient('/room_exploration/room_exploration_server',
                                                      RoomExplorationAction)
 
-        rospy.loginfo('Waiting for action server(s)...')
+        rospy.loginfo('[RoomIPA]Waiting for action server(s)...')
         self._sac_seg.wait_for_server()
         self._sac_exp.wait_for_server()
+
+        rospy.loginfo('[RoomIPA]Waiting for map(s)...')
+        self.last_map = None
+        map_topic = rospy.get_param('map_topic', '/roomba/map_ready')
+        self._sub_map = rospy.Subscriber(map_topic, OccupancyGrid, self.map_ready_cb)
 
     def send_goal_to_segemantation(self, msg: OccupancyGrid) -> MapSegmentationResult:
         img = util.grid_to_sensor_image(msg)
