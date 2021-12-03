@@ -3,13 +3,11 @@
 import os
 import struct
 import sys
-
-import room_ipa
 import rospy
 import math
 import random
 from nav_msgs.msg import OccupancyGrid
-from ipa_building_msgs.msg import MapSegmentationResult, MapSegmentationGoal, RoomExplorationResult
+from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
 from room_ipa import util
 
 
@@ -35,15 +33,19 @@ class MDP(object):
         self.actions = []
         self.gamma = 0.8  # TODO: Tweak this
         self.battery_loss_rate = 0.01  # TODO: Tweak this
-        self.rooms = []
+        # segmentation related
+        self.segmented_map_last_id = -1
+        self.rooms = []  # RoomInformation for each element
 
         # Get initial map
         grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
         self.map_info = grid.info
 
         # Do segmentation
-        self._room_ipa = room_ipa.RoomIPA()
-        segments = self._room_ipa.send_goal_to_segemantation(grid)
+        self._sub_segmented_map = rospy.Subscriber('/room_segmentation/room_segmentation_server/segmented_map',
+                                                   OccupancyGrid, self.get_segmented_map)
+        # self._sub_coverage_path = rospy.Subscriber('/room_exploration/room_exploration_server/coverage_path', Path,
+        #                                            self.coverage_path_cb)
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3
@@ -151,6 +153,11 @@ class MDP(object):
     def distance_to_battery(self, d: float) -> int:  # [0, 100]
         n = d / self.map_info.resolution  # Number of cells traveled
         return max(100, n * self.battery_loss_rate)  # TODO: Not sure if this is good
+
+    def get_segmented_map(self, result: MapSegmentationResult) -> None:  # list of [{centre, area, id}]
+        if result.segmented_map.header.frame_id != self.segmented_map_last_id:
+            self.segmented_map_last_id = result.segmented_map.header.frame_id
+            self.rooms = result.room_information_in_pixel
 
     def do_sweeping(self, img_path: str) -> RoomExplorationResult:
         # TODO use segments from get_segmented_map as inputs

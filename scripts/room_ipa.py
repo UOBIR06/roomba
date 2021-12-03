@@ -21,6 +21,7 @@ from roomba import util
 
 class RoomIPA(object):
     def __init__(self):
+        # Get an action client
         self._sac_seg = actionlib.SimpleActionClient('/room_segmentation/room_segmentation_server',
                                                      MapSegmentationAction)
         self._sac_exp = actionlib.SimpleActionClient('/room_exploration/room_exploration_server',
@@ -40,7 +41,7 @@ class RoomIPA(object):
         goal.return_format_in_pixel = False
         goal.return_format_in_meter = True
         goal.robot_radius = 0.22  # Same as footprint
-        goal.room_segmentation_algorithm = 0
+        goal.room_segmentation_algorithm = 3
 
         rospy.loginfo("Waiting for segmentation reply...")
         self._sac_seg.send_goal_and_wait(goal)
@@ -71,6 +72,17 @@ class RoomIPA(object):
         rospy.loginfo("Got a path with " + str(len(response.coverage_path)) + " nodes.")
         return response
 
+    def map_ready_cb(self, args: OccupancyGrid):
+        print(args)
+
+        if self.last_map and self.last_map.header.frame_id == args.header.frame_id:
+            return
+
+        self.last_map = args
+        rospy.loginfo("Map received. %d X %d." % (self.last_map.info.width, self.last_map.info.height))
+
+        self.send_goal_to_segemantation(msg=self.last_map)
+
     def segmented_map_cb(self, args):
         pass
 
@@ -80,6 +92,6 @@ class RoomIPA(object):
 
 if __name__ == '__main__':
     # --- Main Program  ---
-    rospy.init_node("room_ipa")
+    rospy.init_node("roomba")
     node = RoomIPA()
     rospy.spin()
