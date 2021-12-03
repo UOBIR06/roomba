@@ -21,11 +21,16 @@ from roomba import util
 
 class RoomIPA(object):
     def __init__(self):
+
+        self.last_map = None
+        self._sub_map = rospy.Subscriber('/roomba/map_ready', OccupancyGrid, self.map_ready_cb)
+
         # Get an action client
         self._sac_seg = actionlib.SimpleActionClient('/room_segmentation/room_segmentation_server',
                                                      MapSegmentationAction)
         self._sac_exp = actionlib.SimpleActionClient('/room_exploration/room_exploration_server',
                                                      RoomExplorationAction)
+
         rospy.loginfo('Waiting for action server(s)...')
         self._sac_seg.wait_for_server()
         self._sac_exp.wait_for_server()

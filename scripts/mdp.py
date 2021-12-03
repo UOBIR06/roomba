@@ -43,7 +43,7 @@ class MDP(object):
 
         # Do segmentation
         self._sub_segmented_map = rospy.Subscriber('/room_segmentation/room_segmentation_server/segmented_map',
-                                                   OccupancyGrid, self.get_segmented_map)
+                                                   MapSegmentationResult, self.get_segmented_map)
         # self._sub_coverage_path = rospy.Subscriber('/room_exploration/room_exploration_server/coverage_path', Path,
         #                                            self.coverage_path_cb)
 
