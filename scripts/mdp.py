@@ -26,6 +26,7 @@ class MDP(object):
         #   ri = state[i]
         self.values = {}
         self.policy = {}
+        self.battery = 100 # battery level 0-100
 
         # TODO: Populate according to # of rooms + recharge
         #   -1 : recharge
@@ -33,6 +34,7 @@ class MDP(object):
         # Perhaps simpler to just use a number i.e self.actions = self.num_rooms
         self.actions = []
         self.gamma = 0.8  # TODO: Tweak this
+        self.battery_loss_rate = 0.01   # TODO: Tweak this
         #self._room_ipa = RoomIPA()
         #self.get_segmented_map(img_path='')
         #self.do_sweeping(img_path='')
@@ -112,6 +114,11 @@ class MDP(object):
         for i in range(0, len(s) - 2):
             cleanrooms += s[i]
         return cleanrooms
+
+    # @Yanrong will write it. including bettery used for clean room 'room_to_go' and battery used for go to there
+    # will not update self.battery. just do the estimation.
+    def get_estimate_battery_left(self, room_in_now:int, room_to_go:int) -> int: # battery level 0-100
+        pass
 
     def state_to_area(self, s) -> float:  # areas or distance inside room s
         pass
