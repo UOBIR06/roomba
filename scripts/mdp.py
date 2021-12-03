@@ -3,6 +3,8 @@
 import os
 import struct
 import sys
+
+import room_ipa
 import rospy
 import math
 import random
@@ -24,7 +26,7 @@ class MDP(object):
         #   ri = state[i]
         self.values = {}
         self.policy = {}
-        self.battery = 100 # battery level 0-100
+        self.battery = 100  # Battery level [0, 100]
 
         # TODO: Populate according to # of rooms + recharge
         #   -1 : recharge
@@ -32,15 +34,16 @@ class MDP(object):
         # Perhaps simpler to just use a number i.e self.actions = self.num_rooms
         self.actions = []
         self.gamma = 0.8  # TODO: Tweak this
-        self.battery_loss_rate = 0.01   # TODO: Tweak this
-
-        self._sub_segmented_map = rospy.Subscriber('/room_segmentation/room_segmentation_server/segmented_map',
-                                                   OccupancyGrid, self.get_segmented_map)
-        # self._sub_coverage_path = rospy.Subscriber('/room_exploration/room_exploration_server/coverage_path', Path,
-        #                                            self.coverage_path_cb)
-
+        self.battery_loss_rate = 0.01  # TODO: Tweak this
         self.rooms = []
 
+        # Get initial map
+        grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
+        self.map_info = grid.info
+
+        # Do segmentation
+        self._room_ipa = room_ipa.RoomIPA()
+        segments = self._room_ipa.send_goal_to_segemantation(grid)
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3
@@ -98,9 +101,9 @@ class MDP(object):
         #   when the action taken was to go recharge!
         pass
 
-    def reward(self, s, a, p) -> int:
+    def reward(self, s, a, e) -> int:
         reward = 0
-        # penalise actions which would leave the robot stranded
+        # Penalise actions which would leave the robot stranded
         if not next.canReturntoCharge():
             reward -= math.inf
             # incentivise more clean rooms
@@ -112,33 +115,22 @@ class MDP(object):
             reward -= self.distance_between_states(self, state[-2], next[-2])
             return reward
 
-    def noOfCleanrooms(s):
-        cleanrooms = 0
-        for i in range(0, len(s) - 2):
-            cleanrooms += s[i]
-        return cleanrooms
+    def count_clean_rooms(self, s) -> int:
+        return sum(s[:-2])  # @Jacob: This was noOfCleanRooms
 
     # @Yanrong will write it.
-    def get_estimate_battery_left(self, room_in_now:int, room_to_go:int) -> int: # battery level 0-100
-        # including bettery used for clean room 'room_to_go' and battery used for go to there
+    def get_estimate_battery_left(self, room_in_now: int, room_to_go: int) -> int:  # [0, 100]
+        # including battery used for clean room 'room_to_go' and battery used to go there
         # if you don't want the distance included, just pass room_in_now as room_to_go
         # will not update self.battery. just do the estimation.
         pass
 
-    def state_to_area(self, s) -> float:  # areas or distance inside room s
+    def distance_between_rooms(self, r1: int, r2: int) -> float:
         pass
 
-    def distance_between_states(self, s1, s2) -> float:  # distance
-        pass
-
-    def distance_to_battery(self, s, s_p) -> int:  # battery level 0-100
-        pass
-
-    def get_init_map(self) -> OccupancyGrid:
-        pass
-
-    def get_segmented_map(self, reults: MapSegmentationResult) -> None:  # list of [{centre, area, id}]
-        self.rooms = reults # TODO not done, switching computers
+    def distance_to_battery(self, d: float) -> int:  # [0, 100]
+        n = d / self.map_info.resolution  # Number of cells traveled
+        return max(100, n * self.battery_loss_rate)  # TODO: Not sure if this is good
 
     def do_sweeping(self, img_path: str) -> RoomExplorationResult:
         # TODO use segments from get_segmented_map as inputs
@@ -148,25 +140,5 @@ class MDP(object):
 
 if __name__ == '__main__':
     rospy.init_node('mdp')
-
-    # TODO @Mert I moved these back to room_ipa, and changed some structure, is it make more sense to you now?
-    # Grab explored map when ready
-    # msg = rospy.wait_for_message('/map', OccupancyGrid)
-    # img = util.grid_to_sensor_image(msg)
-
-    # Now stuff the image inside a MapSegmentationGoal
-    # goal = MapSegmentationGoal()
-    # goal.input_map = img
-    # goal.map_resolution = msg.info.resolution
-    # goal.map_origin = msg.info.origin
-    # goal.return_format_in_pixel = False
-    # goal.return_format_in_meter = True
-    # goal.robot_radius = 0.22  # Same as footprint
-    # goal.room_segmentation_algorithm = 0
-
-    # Call segmentation server
-    # client = RoomIPA()
-    # reply = client.send_goal_to_segemantation(goal)
-
     mdp = MDP()
     rospy.spin()

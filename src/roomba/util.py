@@ -136,8 +136,9 @@ def setup_image(image_path):
     return cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="mono8")  # , encoding="mono8"
 
 def grid_to_sensor_image(map: OccupancyGrid) -> SensorImage: #mat feed into Image
-    # Convert it to an image
-    data = bytes(map(lambda x: 255 if x >=250 else 0, map.data))
+    # Convert it to an image:
+    # Remember: free space (0), unknown (-1), obstacle (100)
+    data = bytes(map(lambda x: 255 if x == 0 else 0, map.data))
 
     # Stuff it inside a sensor_msgs/Image
     img = SensorImage()
