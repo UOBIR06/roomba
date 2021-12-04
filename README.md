@@ -22,13 +22,19 @@ To [setup pycharm](https://youtu.be/lTew9mbXrAs?t=215) is you need, from 3:34.
 
 To demo room exploration given `.png` map:
 ```bash
-roslaunch roomba room_exploration.launch
+roslaunch roomba ipa_servers.launch
 ```
 
 To demo frontier exploration on `meeting.world`:
 ```bash
-roslaunch roomba nav.launch
+roslaunch roomba explore.launch
 rosrun roomba explore.py
+```
+
+To demo simple (non-MDP) sweeping:
+```bash
+roslaunch roomba clean.launch
+rosrun roomba clean.py
 ```
 ## Practice
 when publish/subscribe topics only used for this program. use `/roomba/` namespace to avoid conflicts.

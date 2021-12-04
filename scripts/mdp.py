@@ -184,7 +184,7 @@ class MDP(object):
 
     def distance_to_battery(self, d: float) -> int:  # [0, 100]
         n = d / self.map_info.resolution  # Number of cells traveled
-        return max(100, n * self.battery_loss_rate)  # TODO: Not sure if this is good
+        return min(100, n * self.battery_loss_rate)  # TODO: Not sure if this is good
 
     def get_segmented_grid(self, res: OccupancyGrid):
         # total_map_area = len(np.nonzero(res))

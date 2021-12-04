@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Visualizer and simulator -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/explore.rviz"/>
+    <include file="$(find roomba)/launch/simulator.launch"/>
+
+    <!-- Map server (for debug) -->
+    <arg name="debug" default="0"/>
+    <include file="$(find roomba)/launch/map_server.launch" if="$(arg debug)"/>
+
+    <!-- IPA servers -->
+    <include file="$(find roomba)/launch/ipa_servers.launch" />
+
+    <!-- AMCL -->
+    <node name="amcl" pkg="amcl" type="amcl" args="scan:=base_scan"/>
+
+    <!-- move_base -->
+    <include file="$(find roomba)/launch/move_base.launch"/>
+
+    <!-- Our node :) -->
+    <!--node name="clean" pkg="roomba" type="clean.py"/-->
+</launch>

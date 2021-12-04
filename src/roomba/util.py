@@ -14,7 +14,7 @@ from sensor_msgs.msg import Image as SensorImage
 
 
 #global variables
-HOME_ROOT = rospkg.RosPack().get_path('roomba')
+#HOME_ROOT = rospkg.RosPack().get_path('roomba')
 
 
 def timed(fn):
