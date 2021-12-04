@@ -160,9 +160,8 @@ class MDP(object):
         return reward
 
     def count_clean_rooms(self, s) -> int:
-        # return sum(s[:-2])  # @Jacob: This was noOfCleanRooms
-        ct_cl = sum([i.cleaned for i in self.rooms])
-        return ct_cl
+        return sum(s[:-2])  # @Jacob: This was noOfCleanRooms
+        # sum([i.cleaned for i in self.rooms])
 
     def get_estimate_battery_left(self, room_to_go: int, room_in_now: int) -> int:  # [0, 100]
         # including battery used for clean room 'room_to_go' and battery used to go there
@@ -204,11 +203,12 @@ class MDP(object):
         self.segmented_map = result
         self.rooms = dict()
 
-        li1 = deepcopy(self.segmented_map.segmented_map)#, byteorder=sys.byteorder)
+        # FIXME Here's where I have trouble with
+        li1 = deepcopy(self.segmented_map.segmented_map) #, byteorder=sys.byteorder)
         # li = mock.a
         # li2 = np.array(li, dtype=np.uint8)
         # li = li1.deserialize_numpy(li1.data, np)
-        li = cv_bridge.CvBridge().imgmsg_to_cv2(li1, desired_encoding='mono8')
+        li = cv_bridge.CvBridge().imgmsg_to_cv2(li1) #, desired_encoding='mono8'
         total_map_area = len(np.nonzero(li))
         for idx, room in enumerate(result.room_information_in_meter):
             info = RoomInfo()
