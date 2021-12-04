@@ -38,7 +38,7 @@ class RoomIPA(object):
         rospy.loginfo('[RoomIPA]Waiting for map(s)...')
         self.last_map = None
         map_topic = rospy.get_param('map_topic', '/roomba/map_ready')
-        expo_topic = rospy.get_param('map_topic', '/roomba/sweep_grid')
+        expo_topic = rospy.get_param('expo_topic', '/roomba/sweep_grid')
         self._sub_map = rospy.Subscriber(map_topic, OccupancyGrid, self.map_ready_cb)
         self._sub_expo = rospy.Subscriber(expo_topic, OccupancyGrid, self.sweep_grid_cb)
 

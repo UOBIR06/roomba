@@ -138,17 +138,21 @@ def setup_image(image_path):
     return res
 
 
-def grid_to_sensor_image(grid_map: OccupancyGrid) -> SensorImage:  # mat feed into Image
-    # Convert it to an image
-    # Remember: free space (0), unknown (-1), obstacle (100)
-    data = bytes(map(lambda x: 255 if x == 0 else 0, grid_map.data))
-
+def gen_sensor_img_with_data(data, info) -> SensorImage:
     # Stuff it inside a sensor_msgs/Image
     img = SensorImage()
-    img.width = grid_map.info.width
-    img.height = grid_map.info.height
+    img.width = info.width
+    img.height = info.height
     img.encoding = 'mono8'  # '8UC1'
     img.is_bigendian = int(sys.byteorder == 'big')
     img.step = img.width
     img.data = data
+    return img
+
+
+def grid_to_sensor_image(grid_map: OccupancyGrid) -> SensorImage:  # mat feed into Image
+    # Convert it to an image
+    # Remember: free space (0), unknown (-1), obstacle (100)
+    data = bytes(map(lambda x: 255 if x == 0 else 0, grid_map.data))
+    img = gen_sensor_img_with_data(data, grid_map.info)
     return img

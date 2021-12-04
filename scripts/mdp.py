@@ -14,6 +14,7 @@ from sensor_msgs.msg import Image
 from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
 from roomba import util
 from roomba.classes import RoomInfo
+from sensor_msgs.msg import Image as SensorImage
 from copy import deepcopy
 # import mock
 
@@ -199,23 +200,22 @@ class MDP(object):
     def get_segmented_map(self, result: MapSegmentationResult) -> None:  # see self.rooms
         # if result.segmented_map.header.stamp != self.segmented_map_last_id:
         #     self.segmented_map_last_id = result.segmented_map.header.stamp
-
         self.segmented_map = result
         self.rooms = dict()
 
         # FIXME Here's where I have trouble with
-        li1 = deepcopy(self.segmented_map.segmented_map) #, byteorder=sys.byteorder)
+        # li = deepcopy() #, byteorder=sys.byteorder)
         # li = mock.a
-        # li2 = np.array(li, dtype=np.uint8)
-        # li = li1.deserialize_numpy(li1.data, np)
-        li = cv_bridge.CvBridge().imgmsg_to_cv2(li1) #, desired_encoding='mono8'
-        total_map_area = len(np.nonzero(li))
+        li = [x for x in self.segmented_map.segmented_map.data]
+        total_map_area = len(np.nonzero(li)[0])
         for idx, room in enumerate(result.room_information_in_meter):
             info = RoomInfo()
             info.id = idx + 1
             info.centre = room.room_center
-            info.indices = [0 if x == info.id else 255 for x in li]
-            info.area = len(np.nonzero(info.indices)) / total_map_area
+            # Remember: free space (0), unknown (-1), obstacle (100)
+            data = [0 if x == info.id else 255 for x in li]
+            info.img = util.gen_sensor_img_with_data(data, self.segmented_map.segmented_map)
+            info.area = len(np.nonzero(data)[0]) / total_map_area
             self.rooms[info.id] = info
         print(len(self.rooms))
 
