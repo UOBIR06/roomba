@@ -17,6 +17,9 @@ catkin_make # need to do this each time you pull from ipa_coverage_planning cuz 
 catkin_make --pkg ipa_room_segmentation
 ```
 
+To [setup pycharm](https://youtu.be/lTew9mbXrAs?t=215) is you need, from 3:34.
+
+
 To demo room exploration given `.png` map:
 ```bash
 roslaunch roomba room_exploration.launch

@@ -21,6 +21,10 @@ from roomba import util
 
 class RoomIPA(object):
     def __init__(self):
+        # define publishers
+        self._pub_seg = rospy.Publisher('/roomba/segmented_map', MapSegmentationResult, queue_size=0)
+        self._pub_exp = rospy.Publisher('/roomba/explored_map', RoomExplorationResult, queue_size=0)
+
         # Get an action client
         self._sac_seg = actionlib.SimpleActionClient('/room_segmentation/room_segmentation_server',
                                                      MapSegmentationAction)
@@ -34,7 +38,9 @@ class RoomIPA(object):
         rospy.loginfo('[RoomIPA]Waiting for map(s)...')
         self.last_map = None
         map_topic = rospy.get_param('map_topic', '/roomba/map_ready')
+        expo_topic = rospy.get_param('map_topic', '/roomba/sweep_grid')
         self._sub_map = rospy.Subscriber(map_topic, OccupancyGrid, self.map_ready_cb)
+        self._sub_expo = rospy.Subscriber(expo_topic, OccupancyGrid, self.sweep_grid_cb)
 
     def send_goal_to_segemantation(self, msg: OccupancyGrid) -> MapSegmentationResult:
         img = util.grid_to_sensor_image(msg)
@@ -44,14 +50,16 @@ class RoomIPA(object):
         goal.input_map = img
         goal.map_resolution = msg.info.resolution
         goal.map_origin = msg.info.origin
-        goal.return_format_in_pixel = False
+        goal.return_format_in_pixel = True
         goal.return_format_in_meter = True
         goal.robot_radius = 0.22  # Same as footprint
         goal.room_segmentation_algorithm = 3
 
         rospy.loginfo("Waiting for segmentation reply...")
         self._sac_seg.send_goal_and_wait(goal)
-        return self._sac_seg.get_result()
+        res = self._sac_seg.get_result()
+        self._pub_seg.publish(res)
+        return res
 
     # TODO not ready yet
     def send_goal_to_exploration(self, goal: RoomExplorationGoal = None, img_path: str = '') -> RoomExplorationResult:
@@ -74,14 +82,15 @@ class RoomIPA(object):
 
         rospy.loginfo("waiting for result")
         self._sac_exp.send_goal_and_wait(goal)
-        response: RoomExplorationResult = self._sac_exp.get_result()
-        rospy.loginfo("Got a path with " + str(len(response.coverage_path)) + " nodes.")
-        return response
+        res: RoomExplorationResult = self._sac_exp.get_result()
+        rospy.loginfo("Got a path with " + str(len(res.coverage_path)) + " nodes.")
+        self._pub_exp.publish(res)
+        return res
 
     def map_ready_cb(self, args: OccupancyGrid):
-        print(args)
+        # print(args)
 
-        if self.last_map and self.last_map.header.frame_id == args.header.frame_id:
+        if self.last_map and self.last_map.header.seq == args.header.seq:
             return
 
         self.last_map = args

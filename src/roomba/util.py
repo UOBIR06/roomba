@@ -148,7 +148,7 @@ def grid_to_sensor_image(grid_map: OccupancyGrid) -> SensorImage:  # mat feed in
     img.width = grid_map.info.width
     img.height = grid_map.info.height
     img.encoding = 'mono8'  # '8UC1'
-    img.is_bigendian = (sys.byteorder == 'big')
+    img.is_bigendian = int(sys.byteorder == 'big')
     img.step = img.width
     img.data = data
     return img

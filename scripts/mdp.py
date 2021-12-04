@@ -5,10 +5,17 @@ import struct
 import sys
 import rospy
 import math
+import cv_bridge
 import random
-from nav_msgs.msg import OccupancyGrid
+import numpy as np
+from rospy.numpy_msg import numpy_msg
+from nav_msgs.msg import OccupancyGrid, Path
+from sensor_msgs.msg import Image
 from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
-from room_ipa import util
+from roomba import util
+from roomba.classes import RoomInfo
+from copy import deepcopy
+# import mock
 
 
 class MDP(object):
@@ -22,6 +29,7 @@ class MDP(object):
         #   pose = state[-2]
         #   battery = state[-1]
         #   ri = state[i]
+        self.segmented_map = None
         self.values = {}
         self.policy = {}
         self.battery = 100  # Battery level [0, 100]
@@ -34,18 +42,23 @@ class MDP(object):
         self.gamma = 0.8  # TODO: Tweak this
         self.battery_loss_rate = 0.01  # TODO: Tweak this
         # segmentation related
-        self.segmented_map_last_id = -1
-        self.rooms = []  # RoomInformation for each element
+        self.segmented_map_last_id = -1  # TODO check if needed
+        self.segmented_map: MapSegmentationResult  # of type MapSegmentationResult
+        self.rooms = dict()  # room centres for each element, index corresponding with room number, starting from 1 !!
 
         # Get initial map
         grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
         self.map_info = grid.info
 
         # Do segmentation
-        self._sub_segmented_map = rospy.Subscriber('/room_segmentation/room_segmentation_server/segmented_map',
-                                                   MapSegmentationResult, self.get_segmented_map)
-        # self._sub_coverage_path = rospy.Subscriber('/room_exploration/room_exploration_server/coverage_path', Path,
-        #                                            self.coverage_path_cb)
+        self._sub_segmented_map = rospy.Subscriber('/roomba/segmented_map', MapSegmentationResult,
+                                                   self.get_segmented_map)
+        # self._sub_segmented_map = rospy.Subscriber('/room_segmentation/room_segmentation_server/segmented_map',
+        #                                            OccupancyGrid, self.get_segmented_grid)
+
+        # Do sweeping
+        self._pub_sweep = rospy.Publisher('/roomba/sweep_grid', OccupancyGrid, queue_size=20)
+
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3
@@ -147,31 +160,74 @@ class MDP(object):
         return reward
 
     def count_clean_rooms(self, s) -> int:
-        return sum(s[:-2])
+        # return sum(s[:-2])  # @Jacob: This was noOfCleanRooms
+        ct_cl = sum([i.cleaned for i in self.rooms])
+        return ct_cl
 
-    # @Yanrong will write it.
-    def get_estimate_battery_left(self, room_in_now: int, room_to_go: int) -> int:  # [0, 100]
+    def get_estimate_battery_left(self, room_to_go: int, room_in_now: int) -> int:  # [0, 100]
         # including battery used for clean room 'room_to_go' and battery used to go there
         # if you don't want the distance included, just pass room_in_now as room_to_go
         # will not update self.battery. just do the estimation.
-        pass
+        r2 = self.rooms.get(room_to_go)
+        bat = 0
+        bat += r2.area * self.battery_loss_rate  # TODO I think it need to multiply by the whole area of map
+        if room_to_go != room_in_now:
+            dis = self.distance_between_rooms(room_in_now, room_to_go)
+            bat += dis * self.battery_loss_rate
+        return self.battery - bat
 
     def distance_between_rooms(self, r1: int, r2: int) -> float:
-        pass
+        c1 = self.rooms.get(r1).centre
+        c2 = self.rooms.get(r2).centre
+        dis = np.linalg.norm(np.array([c1.x, c1.y, c1.z]) - np.array([c2.x, c2.y, c2.z]))
+        return dis
 
     def distance_to_battery(self, d: float) -> int:  # [0, 100]
         n = d / self.map_info.resolution  # Number of cells traveled
         return max(100, n * self.battery_loss_rate)  # TODO: Not sure if this is good
 
-    def get_segmented_map(self, result: MapSegmentationResult) -> None:  # list of [{centre, area, id}]
-        if result.segmented_map.header.frame_id != self.segmented_map_last_id:
-            self.segmented_map_last_id = result.segmented_map.header.frame_id
-            self.rooms = result.room_information_in_pixel
+    def get_segmented_grid(self, res: OccupancyGrid):
+        # total_map_area = len(np.nonzero(res))
+        # s = np.array( res.data)
+        # x=np.nonzero(res.data)
+        # t=0
+        # for i in (res.data):
+        #     if i:
+        #         t+=1
+        # print(total_map_area)
+        pass
 
-    def do_sweeping(self, img_path: str) -> RoomExplorationResult:
-        # TODO use segments from get_segmented_map as inputs
-        res: RoomExplorationResult = self._room_ipa.send_goal_to_exploration(img_path=img_path)
-        return res
+    def get_segmented_map(self, result: MapSegmentationResult) -> None:  # see self.rooms
+        # if result.segmented_map.header.stamp != self.segmented_map_last_id:
+        #     self.segmented_map_last_id = result.segmented_map.header.stamp
+
+        self.segmented_map = result
+        self.rooms = dict()
+
+        li1 = deepcopy(self.segmented_map.segmented_map)#, byteorder=sys.byteorder)
+        # li = mock.a
+        # li2 = np.array(li, dtype=np.uint8)
+        # li = li1.deserialize_numpy(li1.data, np)
+        li = cv_bridge.CvBridge().imgmsg_to_cv2(li1, desired_encoding='mono8')
+        total_map_area = len(np.nonzero(li))
+        for idx, room in enumerate(result.room_information_in_meter):
+            info = RoomInfo()
+            info.id = idx + 1
+            info.centre = room.room_center
+            info.indices = [0 if x == info.id else 255 for x in li]
+            info.area = len(np.nonzero(info.indices)) / total_map_area
+            self.rooms[info.id] = info
+        print(len(self.rooms))
+
+    def do_sweeping(self, room_number: int) -> None:
+        current_room = self.rooms.get(room_number)
+        self._pub_sweep.publish(current_room.grid)
+        cpath = rospy.wait_for_message('/roomba/calc_coverage_path', RoomExplorationResult)
+
+        # TODO drive the robot around
+        # @Mert can we use something in move_base?
+
+        self.rooms[room_number].cleaned = 1
 
 
 if __name__ == '__main__':
