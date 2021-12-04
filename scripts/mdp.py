@@ -218,6 +218,7 @@ class MDP(object):
             info.area = len(np.nonzero(data)[0]) / total_map_area
             self.rooms[info.id] = info
         print(len(self.rooms))
+        self.policy_iteration()
 
     def do_sweeping(self, room_number: int) -> None:
         current_room = self.rooms.get(room_number)
