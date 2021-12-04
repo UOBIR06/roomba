@@ -98,10 +98,7 @@ class RoomIPA(object):
 
         self.send_goal_to_segemantation(msg=self.last_map)
 
-    def segmented_map_cb(self, args):
-        pass
-
-    def coverage_path_cb(self, args):
+    def sweep_grid_cb(self, args):
         pass
 
 
