@@ -8,7 +8,7 @@ import math
 import random
 from nav_msgs.msg import OccupancyGrid
 from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
-from room_ipa import util
+#from room_ipa import util
 
 
 class MDP(object):
@@ -56,7 +56,7 @@ class MDP(object):
             # Policy Evaluation
             delta = math.inf
             while delta >= 0.001:
-                for s in self.values:  # Iterating over keys (states)
+                for s in self.gen_state():  # Iterating over keys (states)
                     a = self.policy.get(s, random.choice(self.actions))  # Policy action (or random)
                     old_v = self.values.get(s, 0)  # Initially zero (pp. 75)
                     new_v = self.bellman(s, a)
@@ -67,7 +67,7 @@ class MDP(object):
 
             # Policy Improvement
             unstable = False
-            for s in self.values:
+            for s in self.gen_state():
                 old_a = self.policy.get(s, random.choice(self.actions))
                 new_a = None
                 max_v = 0
@@ -82,6 +82,23 @@ class MDP(object):
 
                 if old_a != new_a:
                     unstable = True
+
+    def gen_state(self) -> tuple:
+        # Generates all possible states on request.
+        n = len(self.rooms)
+        r = [0 for _ in range(n)]
+        for p in range(n):  # Robot pose [0, n)
+            for b in range(101):  # Battery level [0, 100]
+                while True:
+                    carry = True
+                    i = 0
+                    while i < n and carry:  # Binary addition
+                        r[i] = (r[i] + 1) % 2
+                        carry = r[i] == 0
+                        i += 1
+                    yield r, p, b
+                    if not any(r):
+                        break  # Stop when we loop around to (0, 0, ..., 0)
 
     def bellman(self, s, a) -> float:
         # Calculate part of the bellman equation for a state and current policy
