@@ -8,7 +8,7 @@ import math
 import random
 from nav_msgs.msg import OccupancyGrid
 from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
-#from room_ipa import util
+from room_ipa import util
 
 
 class MDP(object):
@@ -96,7 +96,7 @@ class MDP(object):
                         r[i] = (r[i] + 1) % 2
                         carry = r[i] == 0
                         i += 1
-                    yield r, p, b
+                    yield *r, p, b
                     if not any(r):
                         break  # Stop when we loop around to (0, 0, ..., 0)
 
@@ -147,7 +147,7 @@ class MDP(object):
         return reward
 
     def count_clean_rooms(self, s) -> int:
-        return sum(s[:-2])  # @Jacob: This was noOfCleanRooms
+        return sum(s[:-2])
 
     # @Yanrong will write it.
     def get_estimate_battery_left(self, room_in_now: int, room_to_go: int) -> int:  # [0, 100]
