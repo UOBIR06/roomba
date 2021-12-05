@@ -3,10 +3,10 @@ TrajectoryPlannerROS:
     acc_lim_y: 2.5 # max m/s^2
     acc_lim_theta: 3.2 # max rad/s^2
 
-    max_vel_x: 1.0 # max m/s
-    min_vel_x: -1.0 # min m/s
+    max_vel_x: 0.5 # max m/s
+    min_vel_x: 0.1 # min m/s
     max_vel_theta: 1.0 # max rad/s
     min_vel_theta: -1.0 # min rad/s
-    min_in_place_vel_theta: 5.0 # min rad/s
+    min_in_place_vel_theta: 0.4 # min rad/s
 
-    holonomic_robot: false
+    holonomic_robot: true

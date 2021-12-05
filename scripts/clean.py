@@ -15,7 +15,7 @@ class Clean(object):
     def __init__(self):
         # Initialize variables
         self.battery = 100  # [0, 100]
-        self.loss_rate = 0.01
+        self.loss_rate = 0.01  # 1 level lost every 100 cells
         self.returning = False
         self.index = 1
 

@@ -4,6 +4,7 @@ import tf
 import math
 import rospy
 import actionlib
+from roomba.viz import Viz
 from roomba.heap import Heap
 from roomba.frontier import Frontier
 from roomba.util import rotateQuaternion
@@ -37,20 +38,18 @@ class Explorer(object):
         self.lock = Lock()  # For mutating the map structure(s)
 
         self.timeout = 10   # No goal progress timeout
-        self.min_dist = 5   # Goal reached tolerance
-        self.min_size = 20  # Minimum frontier size
+        self.min_size = 15  # Minimum frontier size
 
         # Setup ROS hooks
         self.tf = tf.TransformListener()
-        #self.map_sub = rospy.Subscriber('/move_base/global_costmap/costmap', OccupancyGrid, self.map_callback)
-        #self.update_sub = rospy.Subscriber('/move_base/global_costmap/costmap_updates', OccupancyGridUpdate, self.update_callback)
+        # self.map_sub = rospy.Subscriber('/nav/global_costmap/costmap', OccupancyGrid, self.map_callback)
+        # self.update_sub = rospy.Subscriber('/nav/global_costmap/costmap_updates', OccupancyGridUpdate, self.update_callback)
         self.map_sub = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=100)
-        self.mark_pub = rospy.Publisher('/marker', Marker, queue_size=1000)
         self.pose_pub = rospy.Publisher('/estimatedpose', PoseStamped, queue_size=1)
         self.signal = rospy.Publisher('/roomba/map_ready', OccupancyGrid, queue_size=1)
-        #self.pathsrv = rospy.ServiceProxy('move_base', nav_msgs.srv.GetPlan, True)
-        self.point_id = 0
+        # self.pathsrv = rospy.ServiceProxy('move_base', nav_msgs.srv.GetPlan, True)
+        self.viz = Viz()
 
         # Setup actionlib & path service
         self.action = actionlib.SimpleActionClient('move_base', MoveBaseAction)
@@ -62,45 +61,44 @@ class Explorer(object):
 
     def find_path(self, start: tuple, goal: tuple) -> Optional[list]:
         """Find a path between two points on the map."""
+        # With help from:
+        # 1. https://tilde.team/~kiedtl/blog/astar/
+        # 2. https://www.redblobgames.com/pathfinding/grids/algorithms.html
+        # 3. https://zerowidth.com/2013/a-visual-explanation-of-jump-point-search.html
 
-        # Heuristic function
+        # Heuristic function (Manhattan distance)
         def h(pt: tuple) -> float:
-            dx = pt[0] - start[0]
-            dy = pt[1] - start[1]
-            return math.sqrt(dx**2 + dy**2)
+            dx = abs(pt[0] - start[0])
+            dy = abs(pt[1] - start[1])
+            return dx + dy
 
         def reconstruct(m: dict, s: tuple) -> list:
             path = []
             while s in camefrom:
-                # DEBUG: Show path
-                wx, wy = self.map_to_world(*s)
-                self.mark_point(wx, wy, (1, 0, 0), 0.05)
-
                 s = camefrom[s]
                 path.append(s)
             return path
 
         heap = Heap()
-        heap.push(start, h(start))
+        heap.put(start, h(start))
         gscore = {start: 0}
-        camefrom = {}
+        camefrom = {start: None}
 
-        while heap:
-            current = heap.pop()
+        while not heap.empty():
+            current = heap.get()
+
             if current == goal:
                 return reconstruct(camefrom, current)
 
             score = gscore.get(current) + 1  # All neighbours are just one cell away
-            for n in self.nhood_8(*current):
-                if self.get_cell(*n) > 0:
-                    continue  # Ignore occupied cells
+            for n in self.nhood_4(*current):
+                if self.get_cell(*n) != 0:
+                    continue  # Ignore non-free cells
 
                 if score < gscore.get(n, math.inf):
                     camefrom[n] = current
                     gscore[n] = score
-                    if not heap.has(n):
-                        heap.push(n, score + h(n))
-
+                    heap.put(n, score + h(n))
         return None
 
     def build_frontier(self, x: int, y: int, ref: Pose) -> Frontier:
@@ -218,41 +216,6 @@ class Explorer(object):
                     queue.append(neigh)
         return None
 
-    def clear_marks(self):
-        """Clear RViz markers."""
-        m = Marker()
-        m.header.frame_id = 'map'
-        m.header.stamp = rospy.Time()
-        m.ns = 'point'
-        m.action = 3  # Delete all objects in namespace
-        self.mark_pub.publish(m)
-        self.point_id = 0
-
-    def mark_point(self, x: float, y: float, color=(1, 1, 1), scale=0.15):
-        """Place a marker in RViz using '/marker' topic."""
-        m = Marker()
-        m.header.frame_id = 'map'
-        m.header.stamp = rospy.Time()
-
-        m.ns = 'point'
-        m.id = self.point_id
-        self.point_id += 1
-
-        m.type = 1  # Use a cube
-        m.action = 0  # Add/Modify mark
-
-        m.pose.position = Point(x, y, 0)
-        m.pose.orientation = Quaternion(0, 0, 0, 1)
-        m.scale = Vector3(scale, scale, 0.01)
-
-        m.color.r = color[0]
-        m.color.g = color[1]
-        m.color.b = color[2]
-        m.color.a = 1
-
-        m.lifetime = rospy.Duration(0)
-        self.mark_pub.publish(m)
-
     def map_callback(self, msg: OccupancyGrid):
         """Update map and metadata."""
 
@@ -304,8 +267,8 @@ class Explorer(object):
                 n_index = w_index
 
             # DEBUG: Publish starting point
-            wx, wy = self.map_to_world(*n_index)
-            self.mark_point(wx, wy, (1, 1, 0), 0.10)
+            # wx, wy = self.map_to_world(*n_index)
+            # self.viz.mark_point(wx, wy, (1, 1, 0), 0.10)
 
             # Initialize search
             queue = [(*n_index, 0)]
@@ -330,6 +293,10 @@ class Explorer(object):
                     if occ == self.UKNW_CELL:
                         # Build new frontier
                         f = self.build_frontier(nx, ny, pose)
+
+                        if not self.is_allowed(f.centre):
+                            continue  # Reject blacklisted frontiers
+
                         if f.size < self.min_size:
                             continue  # Reject small frontiers
 
@@ -351,11 +318,11 @@ class Explorer(object):
                         #     continue  # No path found
                         # f.path = resp.plan
 
-                        # start = self.world_to_map(pose.position.x, pose.position.y)
-                        # goal = self.world_to_map(f.centre.x, f.centre.y)
-                        # f.path = self.find_path(start, goal)
-                        # if not f.path:
-                        #    continue
+                        start = n_index
+                        goal = (x, y)
+                        f.path = self.find_path(start, goal)
+                        if not f.path:
+                            continue
 
                         frontiers.append(f)
 
@@ -412,6 +379,7 @@ class Explorer(object):
         pose = self.get_pose()
 
         # Find frontiers
+        self.viz.clear_marks()
         frontiers = self.find_frontiers(pose)
         if not frontiers:
             rospy.loginfo('No frontiers found, are we done?')
@@ -427,16 +395,10 @@ class Explorer(object):
             msg.info = self.info
             msg.data = self.data
             self.signal.publish(msg)
-
-            # Quit
-            sys.exit(0)
+            return
 
         # DEBUG: Draw frontiers
-        self.clear_marks()
-        for f in frontiers:
-            for pt in f.points:
-                self.mark_point(pt.x, pt.y, (0, 0, 1), 0.05)
-            self.mark_point(f.centre.x, f.centre.y, (0, 1, 0), 0.10)
+        self.viz.mark_frontiers(frontiers)
 
         # New goal or made progress
         f = frontiers[0]
@@ -453,7 +415,7 @@ class Explorer(object):
         if delta_time > self.timeout:
             self.blacklist.append(goal)
             rospy.loginfo(f'Blacklisted: <{goal.x}, {goal.y}>')
-            self.plan()
+            # self.plan()
             return
 
         # Still pursuing previous goal

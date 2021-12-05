@@ -4,7 +4,7 @@ from roomba.util import getHeading
 
 
 class Frontier:
-    alpha = 0.3  # Distance to frontier
+    alpha = 0.5  # Distance to frontier
     beta = 0.05  # Size of frontier (decreases cost)
     gamma = 0.9  # Angle to frontier
 
