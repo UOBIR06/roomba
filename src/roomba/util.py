@@ -13,8 +13,8 @@ from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import Image as SensorImage
 
 
-#global variables
-#HOME_ROOT = rospkg.RosPack().get_path('roomba')
+# global variables
+HOME_ROOT = rospkg.RosPack().get_path('roomba')
 
 
 def timed(fn):

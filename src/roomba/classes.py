@@ -6,7 +6,6 @@
 from dataclasses import dataclass
 
 import geometry_msgs.msg
-from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import Image as SensorImage
 
 
