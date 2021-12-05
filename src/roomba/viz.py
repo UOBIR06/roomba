@@ -78,6 +78,7 @@ class Viz(object):
 
         m.type = 4  # Use line strip
         m.action = 0  # Add/Modify mark
+        m.pose.orientation.w = 1
         m.scale.x = scale
 
         m.color.r = color[0]

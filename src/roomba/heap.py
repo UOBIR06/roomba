@@ -18,6 +18,13 @@ class Heap:
     def get(self) -> Any:
         return heapq.heappop(self.elements)[1]
 
+    def has(self, item: Any) -> bool:
+        for e in self.elements:
+            _, i = e
+            if i == item:
+                return True
+        return False
+
 # class Heap(object):
 #     """Implementation of a min-heap."""
 #

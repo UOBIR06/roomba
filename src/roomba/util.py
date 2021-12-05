@@ -1,21 +1,20 @@
-import math
 import os
-import time
 import sys
-import rospkg
-
 import cv2
+import math
+import time
+import rospy
+import rospkg
 import cv_bridge
 import numpy as np
-import rospy
-from geometry_msgs.msg import Quaternion
+from typing import Optional
 from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import Quaternion
 from sensor_msgs.msg import Image as SensorImage
 
 
-#global variables
-#HOME_ROOT = rospkg.RosPack().get_path('roomba')
-
+# Global variable(s)
+# HOME_ROOT = rospkg.RosPack().get_path('roomba')  # FIXME: Causes exception
 
 def timed(fn):
     """ Decorator to time functions. For debugging time critical code """
