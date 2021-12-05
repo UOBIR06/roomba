@@ -10,13 +10,10 @@ import random
 import numpy as np
 from rospy.numpy_msg import numpy_msg
 from nav_msgs.msg import OccupancyGrid, Path
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image as SensorImage
 from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
 from roomba import util
 from roomba.classes import RoomInfo
-from sensor_msgs.msg import Image as SensorImage
-from copy import deepcopy
-# import mock
 
 
 class MDP(object):
@@ -30,7 +27,6 @@ class MDP(object):
         #   pose = state[-2]
         #   battery = state[-1]
         #   ri = state[i]
-        self.segmented_map = None
         self.values = {}
         self.policy = {}
         self.battery = 100  # Battery level [0, 100]
@@ -43,9 +39,7 @@ class MDP(object):
         self.gamma = 0.8  # TODO: Tweak this
         self.battery_loss_rate = 0.01  # TODO: Tweak this
         # segmentation related
-        self.segmented_map_last_id = -1  # TODO check if needed
-        self.segmented_map: MapSegmentationResult  # of type MapSegmentationResult
-        self.rooms = dict()  # room centres for each element, index corresponding with room number, starting from 1 !!
+        self.rooms = dict()  # room centres for each element, key corresponding with room number, starting from 1 !!
 
         # Get initial map
         grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
@@ -54,11 +48,8 @@ class MDP(object):
         # Do segmentation
         self._sub_segmented_map = rospy.Subscriber('/roomba/segmented_map', MapSegmentationResult,
                                                    self.get_segmented_map)
-        # self._sub_segmented_map = rospy.Subscriber('/room_segmentation/room_segmentation_server/segmented_map',
-        #                                            OccupancyGrid, self.get_segmented_grid)
-
         # Do sweeping
-        self._pub_sweep = rospy.Publisher('/roomba/sweep_grid', OccupancyGrid, queue_size=20)
+        self._pub_sweep = rospy.Publisher('/roomba/sweep_grid', SensorImage, queue_size=20)
 
 
     def policy_iteration(self):
@@ -186,38 +177,26 @@ class MDP(object):
         n = d / self.map_info.resolution  # Number of cells traveled
         return min(100, n * self.battery_loss_rate)  # TODO: Not sure if this is good
 
-    def get_segmented_grid(self, res: OccupancyGrid):
-        # total_map_area = len(np.nonzero(res))
-        # s = np.array( res.data)
-        # x=np.nonzero(res.data)
-        # t=0
-        # for i in (res.data):
-        #     if i:
-        #         t+=1
-        # print(total_map_area)
-        pass
-
     def get_segmented_map(self, result: MapSegmentationResult) -> None:  # see self.rooms
-        # if result.segmented_map.header.stamp != self.segmented_map_last_id:
-        #     self.segmented_map_last_id = result.segmented_map.header.stamp
-        self.segmented_map = result
         self.rooms = dict()
-
-        # FIXME Here's where I have trouble with
-        # li = deepcopy() #, byteorder=sys.byteorder)
-        # li = mock.a
-        li = [x for x in self.segmented_map.segmented_map.data]
-        total_map_area = len(np.nonzero(li)[0])
+        li = [x if 0 < x <= len(result.room_information_in_meter) else 0 for x in result.segmented_map.data]
+        total_map_area = np.count_nonzero(li)
         for idx, room in enumerate(result.room_information_in_meter):
             info = RoomInfo()
             info.id = idx + 1
-            info.centre = room.room_center
             # Remember: free space (0), unknown (-1), obstacle (100)
             data = [0 if x == info.id else 255 for x in li]
-            info.img = util.gen_sensor_img_with_data(data, self.segmented_map.segmented_map)
-            info.area = len(np.nonzero(data)[0]) / total_map_area
+            info.area = (len(data) - np.count_nonzero(data)) / total_map_area
+            if info.area < 0.001:  # too small
+                continue
+            info.centre = room.room_center
+            info.img = util.gen_sensor_img_with_data(data, result.segmented_map)
             self.rooms[info.id] = info
-        print(len(self.rooms))
+        rospy.loginfo('[mdp]got %d rooms.' % len(self.rooms))
+
+        for i in self.rooms.values():
+            self._pub_sweep.publish(i.img)
+
         self.policy_iteration()
 
     def do_sweeping(self, room_number: int) -> None:
@@ -227,7 +206,6 @@ class MDP(object):
 
         # TODO drive the robot around
         # @Mert can we use something in move_base?
-
         self.rooms[room_number].cleaned = 1
 
 

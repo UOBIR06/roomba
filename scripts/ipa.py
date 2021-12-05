@@ -12,7 +12,6 @@ import rospkg
 
 from ipa_building_msgs.msg import MapSegmentationAction, MapSegmentationGoal, MapSegmentationResult, \
     RoomExplorationAction, RoomExplorationGoal, RoomExplorationResult
-import dynamic_reconfigure.client
 from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import Pose2D
 from sensor_msgs.msg import Image as SensorImage
@@ -36,13 +35,13 @@ class RoomIPA(object):
         self._sac_exp.wait_for_server()
 
         rospy.loginfo('[RoomIPA]Waiting for map(s)...')
-        self.last_map = None
         map_topic = rospy.get_param('map_topic', '/roomba/map_ready')
         expo_topic = rospy.get_param('expo_topic', '/roomba/sweep_grid')
-        self._sub_map = rospy.Subscriber(map_topic, OccupancyGrid, self.map_ready_cb)
-        self._sub_expo = rospy.Subscriber(expo_topic, OccupancyGrid, self.sweep_grid_cb)
+        self._sub_map = rospy.Subscriber(map_topic, OccupancyGrid, self.send_goal_to_segemantation)
+        self._sub_expo = rospy.Subscriber(expo_topic, SensorImage, self.send_goal_to_exploration)
 
     def send_goal_to_segemantation(self, msg: OccupancyGrid) -> MapSegmentationResult:
+        rospy.loginfo("Map received. %d X %d." % (msg.info.width, msg.info.height))
         img = util.grid_to_sensor_image(msg)
 
         # Define the goal
@@ -61,45 +60,25 @@ class RoomIPA(object):
         self._pub_seg.publish(res)
         return res
 
-    # TODO not ready yet
-    def send_goal_to_exploration(self, goal: RoomExplorationGoal = None, img_path: str = '') -> RoomExplorationResult:
-        if not img_path:
-            img_path = os.path.join(rospkg.RosPack().get_path('roomba'), 'data/sim_data/meeting.png')
-        map_img: SensorImage = util.setup_image(img_path)
+    def send_goal_to_exploration(self, msg: SensorImage) -> RoomExplorationResult:
+        # Define the goal
+        goal = RoomExplorationGoal()
+        goal.input_map = msg
+        goal.map_origin.position.x = 0
+        goal.map_origin.position.y = 0
+        goal.map_resolution = 0.05
+        goal.robot_radius = 0.5
+        goal.coverage_radius = 0.5
+        goal.starting_position = Pose2D()
 
-        # testing:
-        if not goal:
-            # Define the goal
-            goal = RoomExplorationGoal()
-            goal.input_map = map_img
-            goal.map_origin.position.x = 0
-            goal.map_origin.position.y = 0
-            goal.map_resolution = 0.05
-            goal.robot_radius = 0.5
-            goal.coverage_radius = 0.5
-            goal.starting_position = Pose2D()
-            # goal.planning_mode
-
-        rospy.loginfo("waiting for result")
+        rospy.loginfo("waiting for exploration reply")
         self._sac_exp.send_goal_and_wait(goal)
         res: RoomExplorationResult = self._sac_exp.get_result()
         rospy.loginfo("Got a path with " + str(len(res.coverage_path)) + " nodes.")
         self._pub_exp.publish(res)
+        print(res.coverage_path)
         return res
 
-    def map_ready_cb(self, args: OccupancyGrid):
-        # print(args)
-
-        if self.last_map and self.last_map.header.seq == args.header.seq:
-            return
-
-        self.last_map = args
-        rospy.loginfo("Map received. %d X %d." % (self.last_map.info.width, self.last_map.info.height))
-
-        self.send_goal_to_segemantation(msg=self.last_map)
-
-    def sweep_grid_cb(self, args):
-        pass
 
 
 if __name__ == '__main__':
