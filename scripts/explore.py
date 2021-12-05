@@ -42,13 +42,10 @@ class Explorer(object):
 
         # Setup ROS hooks
         self.tf = tf.TransformListener()
-        # self.map_sub = rospy.Subscriber('/nav/global_costmap/costmap', OccupancyGrid, self.map_callback)
-        # self.update_sub = rospy.Subscriber('/nav/global_costmap/costmap_updates', OccupancyGridUpdate, self.update_callback)
         self.map_sub = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=100)
         self.pose_pub = rospy.Publisher('/estimatedpose', PoseStamped, queue_size=1)
         self.signal = rospy.Publisher('/roomba/map_ready', OccupancyGrid, queue_size=1)
-        # self.pathsrv = rospy.ServiceProxy('move_base', nav_msgs.srv.GetPlan, True)
         self.viz = Viz()
 
         # Setup actionlib & path service
@@ -443,10 +440,10 @@ class Explorer(object):
         self.action.send_goal(goal, done_cb=self.goal_reached)
 
     def is_allowed(self, goal: Point) -> bool:
-        for x, y in self.blacklist:
-            if abs(x - goal.x) < 0.25 and abs(y - goal.y) < 0.25:
-                return True
-        return False
+        for pt in self.blacklist:
+            if abs(pt.x - goal.x) < 0.25 and abs(pt.y - goal.y) < 0.25:
+                return False
+        return True
 
     def plan(self):
         """Set a goal to move towards"""
@@ -474,7 +471,7 @@ class Explorer(object):
             return
 
         # DEBUG: Draw frontiers
-        # self.viz.mark_frontiers(frontiers)
+        self.viz.mark_frontiers(frontiers)
 
         # New goal or made progress
         f = frontiers[0]
