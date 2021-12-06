@@ -3,8 +3,10 @@
 import tf
 import math
 import rospy
+import numpy as np
 from typing import List
 from roomba.grid import Grid
+from nav_msgs.srv import GetPlan
 from move_base_msgs.msg import *
 from sensor_msgs.msg import Image
 from ipa_building_msgs.msg import *
@@ -21,6 +23,7 @@ class Room:
     image: Image
     area: int
     path: List[PoseStamped]
+    cost: float
 
     def contains(self, p: Pose2D) -> bool:
         """Check if room contains given pose."""
@@ -64,12 +67,13 @@ class Clean(object):
         rospy.loginfo('Waiting for move_base...')
         self.move_client = SimpleActionClient('move_base', MoveBaseAction)
         self.move_client.wait_for_server()
+        self.move_service = rospy.ServiceProxy('nav', GetPlan, True)
 
         # Get map segmentation
         goal = MapSegmentationGoal()
         goal.input_map = image
         goal.map_resolution = self.grid.resolution
-        goal.map_origin = self.grid.origin
+        goal.map_origin = self.grid.info.origin
         goal.return_format_in_pixel = True
         goal.return_format_in_meter = True
         goal.robot_radius = 0.22  # Same as footprint
@@ -83,20 +87,23 @@ class Clean(object):
         self.rooms = []
         self.charger_room = -1
 
-        size = result.segmented_map.width * result.segmented_map.height
-        for i in result.room_information_in_meter:
+        li = [x if 0 < x <= len(result.room_information_in_meter) else 0 for x in result.segmented_map.data]
+        total_map_area = np.count_nonzero(li)
+        for i, info in enumerate(result.room_information_in_meter):
             r = Room()
-            r.centre = i.room_center
-            r.bounds = i.room_min_max
-            data = [0 if x == i + 1 else 255 for x in result.segmented_map]
+            r.centre = info.room_center
+            r.bounds = info.room_min_max
+            data = [0 if x == i + 1 else 255 for x in li]
+            r.area = (len(data) - np.count_nonzero(data)) / total_map_area
+            if r.area < 0.001:
+                continue  # Reject small rooms
             r.image = gen_sensor_img_with_data(data, result.segmented_map)
-            r.area = sum(data) - (255 * size)
 
             rospy.loginfo(f'Waiting for coverage in room #{i}...')
             centre = Pose2D(r.centre.x, r.centre.y, 0)
             r.path = self.get_coverage(r.image, result.map_resolution, result.map_origin, centre)
+            r.cost = self.path_cost(r.path)
 
-            # TODO: Maybe check if area too small like `mdp.py`
             self.rooms.append(r)
 
             # Check if charger (starting location) is this room
@@ -118,8 +125,6 @@ class Clean(object):
         result = self.ipa_exp.get_result()
         path = result.coverage_path_pose_stamped
 
-        # TODO: Simplify path
-
         return path
 
     def battery_lost(self, p1: PoseStamped, p2: PoseStamped) -> float:
@@ -130,10 +135,13 @@ class Clean(object):
         return min(100, n * self.loss_rate)
 
     def path_cost(self, path: list) -> float:
-        for i, cur in enumerate(path):
-            if i + 1 < len(path):
-                nxt = path[i + 1]
-                # TODO
+        """Cost (battery loss) of following points on a path."""
+        cost = 0
+        for i in range(len(path) - 1):
+            p1 = path[i]
+            p2 = path[i + 1]
+            cost += self.battery_lost(p1, p2)
+        return cost
 
     def send_goal(self, p: PoseStamped):
         """Send navigation goal to move_base."""
@@ -154,13 +162,22 @@ class Clean(object):
 
     def start(self):
         """With rooms and paths all configured, start cleaning."""
-        # TODO: Create adjacency graph
+        # Create adjacency graph
         N = len(self.rooms)
         graph = []
         for i in range(N):
-            graph[i] = []
+            row = []
             for j in range(N):
-                pass  # graph[i][j] = self.path_cost()
+                # Get path between rooms
+                start = self.rooms[i].centre
+                end = self.rooms[j].centre
+                result = self.move_service(start, end, 0)
+                path = result.poses
+
+                # Sum up distance to room + within room
+                cost = self.path_cost(path) + self.rooms[j].cost
+                row.append(cost)
+            graph.append(row)
 
         # Repeat until all nodes visited
         visited = [False] * N
@@ -196,7 +213,7 @@ class Clean(object):
         # graph : adjacency matrix, row-major
         # visited : boolean array
         # battery : integer [0, 100]
-        # node : current node index
+        # this : current node index
 
         # Terminal condition: out of battery
         back = graph[this][self.charger_room]  # Cost of going back to the charger
