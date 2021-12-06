@@ -130,16 +130,17 @@ class Clean(object):
         result = self.ipa_exp.get_result()
         path = result.coverage_path_pose_stamped
 
-         #for each posestamped in the path
-        #except the first and last obvs
-        for i in range (1, len(path)):
-            #compare its orientation to predecessor
-            prevorientation = path(i-1).pose.orientation.z
-            #if the difference in orientation is not equalto /greater than π
-            if math.pi > abs(prevorientation - path(i).pose.orientation.z):
-                path.pop(i)
-        return path
-
+        # Smooth-out path
+        smooth = [path[0]]
+        dt = math.pi / 6
+        for i in range(1, len(path) - 1):
+            pt = getHeading(path[i - 1].pose.orientation)
+            it = getHeading(path[i].pose.orientation)
+            nt = getHeading(path[i + 1].pose.orientation)
+            if abs(nt - it) >= dt or abs(it - pt) >= dt:
+                smooth.append(path[i])
+        smooth.append(path[-1])
+        return smooth
 
     def battery_lost(self, p1: PoseStamped, p2: PoseStamped) -> float:
         """Amount of battery lost traveling between poses."""
