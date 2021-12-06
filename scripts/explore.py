@@ -56,123 +56,6 @@ class Explorer(object):
         self.do_spin()
         self.timer = rospy.Timer(rospy.Duration(1), lambda e: self.plan())
 
-    def find_path(self, start: tuple, goal: tuple) -> Optional[list]:
-        """Find a path between two points on the map."""
-
-        # With help from:
-        # 1. https://tilde.team/~kiedtl/blog/astar/
-        # 2. https://www.redblobgames.com/pathfinding/grids/algorithms.html
-        # 3. https://zerowidth.com/2013/a-visual-explanation-of-jump-point-search.html
-        # 4. http://users.cecs.anu.edu.au/~dharabor/data/papers/harabor-grastien-aaai11.pdf
-        # 5. https://github.com/qiao/PathFinding.js
-
-        # Heuristic function (Manhattan distance)
-        def h(pt: tuple) -> float:
-            dx = abs(pt[0] - start[0])
-            dy = abs(pt[1] - start[1])
-            return dx + dy
-
-        heap = Heap()
-        heap.put(start, h(start))
-        gscore = {start: 0}
-        camefrom: Dict[tuple, Optional[tuple]] = {start: None}
-        F = math.sqrt(2) - 1
-
-        def reconstruct() -> list:
-            node = goal
-            path = []
-            while node and node in camefrom:
-                x, y = self.map_to_world(*node)
-                path.append(Point(x, y, 0))
-                node = camefrom[node]
-            return path
-
-        def prune(cur: tuple) -> list:
-            p = camefrom[cur]
-            if p is None:
-                return self.nhood_8(*cur)
-            n = []
-            x, y = cur
-            px, py = p
-            dx = int((x - px) / max(abs(x - px), 1))
-            dy = int((y - py) / max(abs(y - py), 1))
-            if dx != 0 and dy != 0:  # Diagonal move
-                if self.is_empty(x, y + dy):
-                    n.append((x, y + dy))
-                if self.is_empty(x + dx, y):
-                    n.append((x + dx, y))
-                if self.is_empty(x + dx, y + dy):
-                    n.append((x + dx, y + dy))
-                if not self.is_empty(x - dx, y):
-                    n.append((x - dx, y + dy))
-                if not self.is_empty(x, y - dy):
-                    n.append((x + dx, y - dy))
-            else:  # Straight move
-                if dx == 0:
-                    if self.is_empty(x, y + dy):
-                        n.append((x, y + dy))
-                    if not self.is_empty(x + 1, y):
-                        n.append((x + 1, y + dy))
-                    if not self.is_empty(x - 1, y):
-                        n.append((x - 1, y + dy))
-                else:
-                    if self.is_empty(x + dx, y):
-                        n.append((x + dx, y))
-                    if not self.is_empty(x, y + 1):
-                        n.append((x + dx, y + 1))
-                    if not self.is_empty(x, y - 1):
-                        n.append((x + dx, y - 1))
-            return n
-
-        def jump(x, y, px, py):
-            if not self.is_empty(x, y):
-                return None
-            if (x, y) == goal:
-                return goal
-            # Check for forced neighbours
-            dx = x - px
-            dy = y - py
-            if dx != 0 and dy != 0:  # Along diagonal
-                if (self.is_empty(x - dx, y + dy) and not self.is_empty(x - dx, y)) or \
-                        (self.is_empty(x + dx, y - dy) and not self.is_empty(x, y - dy)):
-                    return x, y
-                if jump(x + dx, y, x, y) or jump(x, y + dy, x, y):
-                    return x, y
-            else:  # Along straight
-                if dx != 0:
-                    if (self.is_empty(x + dx, y + 1) and not self.is_empty(x, y + 1)) or \
-                            (self.is_empty(x + dx, y - 1) and not self.is_empty(x, y - 1)):
-                        return x, y
-                else:
-                    if (self.is_empty(x + 1, y + dy) and not self.is_empty(x + 1, y)) or \
-                            (self.is_empty(x - 1, y + dy) and not self.is_empty(x - 1, y)):
-                        return x, y
-            return jump(x + dx, y + dy, x, y)
-
-        while not heap.empty():
-            current = heap.get()
-
-            if current == goal:
-                return reconstruct()
-
-            for n in prune(current):
-                jp = jump(*n, *current)
-                if jp:
-                    dx = abs(current[0] - jp[0])
-                    dy = abs(current[1] - jp[1])
-                    score = gscore.get(current) + (F * dx + dy if dx < dy else F * dy + dx)
-                    if score < gscore.get(jp, math.inf):
-                        camefrom[jp] = current
-                        gscore[jp] = score
-                        if not heap.has(jp):
-                            heap.put(jp, score + h(jp))
-        return None
-
-    def is_empty(self, x: int, y: int) -> bool:
-        return 0 <= x < self.info.width and \
-               0 <= y < self.info.height and \
-               self.get_cell(x, y) == self.FREE_CELL
-
     def build_frontier(self, x: int, y: int, ref: Pose) -> Frontier:
         """Given a starting UKNW_CELL, build a frontier of connected cells."""
         # Initialize search
@@ -368,36 +251,8 @@ class Explorer(object):
 
                         if not self.is_allowed(f.centre):
                             continue  # Reject blacklisted frontiers
-
                         if f.size < self.min_size:
                             continue  # Reject small frontiers
-
-                        # try:
-                        #     start = PoseStamped()
-                        #     start.header.frame_id = 'map'
-                        #     start.pose = pose
-                        #
-                        #     end = PoseStamped()
-                        #     end.header.frame_id = 'map'
-                        #     end.pose = Pose(f.centre, Quaternion(0, 0, 0, 1))
-                        #
-                        #     resp = self.pathsrv(start, end, 0)
-                        # except Exception as e:
-                        #     rospy.logwarn(f'Path service returned error: {e}')
-                        #     continue
-                        #
-                        # if not resp.plan.poses:
-                        #     continue  # No path found
-                        # f.path = resp.plan
-
-                        # start = n_index
-                        # goal = (x, y)
-                        # f.path = self.find_path(start, goal)
-                        # if not f.path:
-                        #     continue
-                        #
-                        # # DEBUG: Draw path
-                        # self.viz.draw_lines(f.path, (0, 1, 0), 0.05)
 
                         frontiers.append(f)
 
@@ -452,7 +307,6 @@ class Explorer(object):
         pose = self.get_pose()
 
         # Find frontiers
-        self.viz.clear_marks()
         frontiers = self.find_frontiers(pose)
         if not frontiers:
             rospy.loginfo('No frontiers found, are we done?')
@@ -471,6 +325,7 @@ class Explorer(object):
             return
 
         # DEBUG: Draw frontiers
+        self.viz.clear_marks()
         self.viz.mark_frontiers(frontiers)
 
         # New goal or made progress
