@@ -89,14 +89,13 @@ class Clean(object):
         self.charger_room = -1
 
         image = np.frombuffer(result.segmented_map.data, dtype=np.intc)
-        size = 255 * len(image)
         for i, info in enumerate(result.room_information_in_meter):
             r = Room()
             r.centre = info.room_center
             r.bounds = info.room_min_max
             data = [255 if x == i + 1 else 0 for x in image]
             r.image = gen_sensor_img_with_data(data, result.segmented_map)
-            r.area = (size - np.count_nonzero(data)) * result.map_resolution
+            r.area = np.count_nonzero(data) * result.map_resolution ** 2  # m^2
 
             # Check if charger (starting location) is this room
             if r.contains(pose):
@@ -109,6 +108,7 @@ class Clean(object):
             # Get room coverage plan
             rospy.loginfo(f'Waiting for coverage in room #{i}...')
             r.path = self.get_coverage(r.image, result.map_resolution, result.map_origin, start)
+
             for p in r.path:  # Change '/map' to 'map'
                 p.header.frame_id = 'map'
             r.cost = self.path_cost(r.path)
@@ -121,8 +121,8 @@ class Clean(object):
         goal.input_map = image
         goal.map_resolution = resolution
         goal.map_origin = origin
-        goal.robot_radius = 0.44  # Double the footprint
-        goal.coverage_radius = 0.44
+        goal.robot_radius = 0.22  # Same as footprint
+        goal.coverage_radius = 0.44  # Double as footprint
         goal.starting_position = pose
         goal.planning_mode = 1  # Use the footprint, not FOV
 
@@ -200,6 +200,13 @@ class Clean(object):
 
     def start(self):
         """With rooms and paths all configured, start cleaning."""
+        if not self.rooms:
+            rospy.logerr('No rooms found, aborting!')
+            return
+        if self.charger_room < 0:
+            rospy.logerr('Charger room not found, aborting!')
+            return
+
         # Create adjacency graph
         N = len(self.rooms)
         graph = []
