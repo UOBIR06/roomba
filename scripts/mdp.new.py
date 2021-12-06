@@ -122,6 +122,37 @@ class MDP(object):
                 if old_a != new_a:
                     unstable = True
 
+    def bellman(self, s, a) -> float:
+        # Calculate part of the bellman equation for a state and current policy
+        # V(s) = sum_{s'} T(s' | s, a) [ r(s, a, s') + gamma * V(s') ]
+        # We forgo T(...) using `self.end_states` here.
+        return sum([
+            self.reward(s, a, e) + self.gamma * self.values.get(e, 0)
+            for e in self.end_states(s, a)
+        ])
+
+    def end_states(self, s, a) -> list:
+        # The point of this function is to *avoid* iterating over the enormous
+        # state space (i.e. for s in self.values) because we *know* the transitions
+        # that are actually possible are a small, predictable fraction of the space.
+
+        cur_room = s[-2]
+        cur_batt = s[-1]
+
+        if a == -1:  # Recharge action
+            batt = self.get_estimate_battery_left(cur_room, 0)  # NOTE: Assuming room #0 has the charger
+        else:  # Clean action
+            batt = self.get_estimate_battery_left(cur_room, a)
+
+        diff_batt = cur_batt - batt
+        if diff_batt <= 0:
+            return []  # Action would strand robot, not possible
+
+        s[a] = 1  # If a == -1 this changes battery which is over-written below, otherwise sets room `a` to clean (1)
+        s[-2] = 0 if a == -1 else a  # New room
+        s[-1] = diff_batt  # New battery
+        return [s]
+
     def gen_state(self):  # -> tuple:
         # Generates all possible states on request.
         n = len(self.rooms)
@@ -197,37 +228,6 @@ class MDP(object):
 
     def gen_reward_charge(self):
         pass
-
-    def bellman(self, s, a) -> float:
-        # Calculate part of the bellman equation for a state and current policy
-        # V(s) = sum_{s'} T(s' | s, a) [ r(s, a, s') + gamma * V(s') ]
-        # We forgo T(...) using `self.end_states` here.
-        return sum([
-            self.reward(s, a, e) + self.gamma * self.values.get(e, 0)
-            for e in self.end_states(s, a)
-        ])
-
-    def end_states(self, s, a) -> list:
-        # The point of this function is to *avoid* iterating over the enormous
-        # state space (i.e. for s in self.values) because we *know* the transitions
-        # that are actually possible are a small, predictable fraction of the space.
-
-        cur_room = s[-2]
-        cur_batt = s[-1]
-
-        if a == -1:  # Recharge action
-            batt = self.get_estimate_battery_left(cur_room, 0)  # NOTE: Assuming room #0 has the charger
-        else:  # Clean action
-            batt = self.get_estimate_battery_left(cur_room, a)
-
-        diff_batt = cur_batt - batt
-        if diff_batt <= 0:
-            return []  # Action would strand robot, not possible
-
-        s[a] = 1  # If a == -1 this changes battery which is over-written below, otherwise sets room `a` to clean (1)
-        s[-2] = 0 if a == -1 else a  # New room
-        s[-1] = diff_batt  # New battery
-        return [s]
 
     # reward function, determines how much the robot will value a given action
     def reward(self, s, a, p) -> int:
