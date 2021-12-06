@@ -16,6 +16,7 @@ from sensor_msgs.msg import Image as SensorImage
 # Global variable(s)
 # HOME_ROOT = rospkg.RosPack().get_path('roomba')  # FIXME: Causes exception
 
+
 def timed(fn):
     """ Decorator to time functions. For debugging time critical code """
 
@@ -155,3 +156,10 @@ def grid_to_sensor_image(grid_map: OccupancyGrid) -> SensorImage:  # mat feed in
     data = bytes(map(lambda x: 255 if x == 0 else 0, grid_map.data))
     img = gen_sensor_img_with_data(data, grid_map.info)
     return img
+
+
+def normalise_dict(d: dict) -> dict:
+    l = len(d)
+    for i in d:
+        d[i] /= l
+    return d
