@@ -10,11 +10,11 @@ import random
 import numpy as np
 from rospy.numpy_msg import numpy_msg
 from nav_msgs.msg import OccupancyGrid, Path
+from geometry_msgs.msg import Point32
 from sensor_msgs.msg import Image as SensorImage
 from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
 from roomba import util
 from roomba.classes import RoomInfo
-
 
 
 class MDP(object):
@@ -23,10 +23,31 @@ class MDP(object):
         # segmentation related
         self.rooms = dict()  # room centres for each element, key corresponding with room number, starting from 1 !!
 
-        self.rooms[1] = 1
-        self.rooms[2] = 2
-        self.rooms[3] = 3
-        self.rooms_bi = []
+        # Do sweeping
+        self._pub_sweep = rospy.Publisher('/roomba/sweep_grid', SensorImage, queue_size=20)
+
+        # Get initial map
+        grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
+        # self.map_info = grid.info
+
+        # Do segmentation
+        seg_map = rospy.wait_for_message("/roomba/segmented_map", MapSegmentationResult)
+        self.get_segmented_map(seg_map)
+        # self._sub_segmented_map = rospy.Subscriber('/roomba/segmented_map', MapSegmentationResult,
+        #                                            self.get_segmented_map)
+
+        # # TODO test data
+        # self.rooms[1] = RoomInfo()
+        # self.rooms[2] = RoomInfo()
+        # self.rooms[3] = RoomInfo()
+        # # TODO test data
+
+        self.charging_point = Point32()  # where battery is can be initial point?
+        self.area_rate = 100.0  # TODO find some proper number
+        self.charge_rate = 1.0  # TODO find some proper number
+        self.dis_rate = 1.0  # TODO find some proper number
+        self.gamma = 0.8  # TODO: Tweak this
+        self.battery_loss_rate = 0.01  # TODO: Tweak this
 
         # States are tuples: (r0, ..., rn, pose, battery)
         #   r0, ..., rn : cleanliness state of room i
@@ -45,29 +66,25 @@ class MDP(object):
         #   -1 : recharge
         #   [0, inf] : clean room x
 
-        # todo testing
         self.states = self.gen_state()
-        # todo end tesing
-
         # Perhaps simpler to just use a number i.e self.actions = self.num_rooms
         self.actions = [0, 1, 2]  # 0move 1clean,2charge
         self.transitions = {
             0: self.gen_trans_move(),
-            1: self.gen_trans_clean(),
-            2: self.gen_trans_charge()
+            # 1: self.gen_trans_clean(),
+            # 2: self.gen_trans_charge()
         }
-        self.gamma = 0.8  # TODO: Tweak this
-        self.battery_loss_rate = 0.01  # TODO: Tweak this
+        self.rewards = {
+            0: self.gen_reward_move(),
+            # 1: self.gen_reward_clean(),
+            # 2: self.gen_reward_charge()
+        }
 
-        # Get initial map
-        grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
-        self.map_info = grid.info
+        (self.transitions[1], self.rewards[1]) = self.gen_trans_clean()
+        (self.transitions[2], self.rewards[2]) = self.gen_trans_charge()
 
-        # Do segmentation
-        self._sub_segmented_map = rospy.Subscriber('/roomba/segmented_map', MapSegmentationResult,
-                                                   self.get_segmented_map)
-        # Do sweeping
-        self._pub_sweep = rospy.Publisher('/roomba/sweep_grid', SensorImage, queue_size=20)
+        self.policy_iteration()
+
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3
@@ -78,7 +95,7 @@ class MDP(object):
             # Policy Evaluation
             delta = math.inf
             while delta >= 0.001:
-                for s in self.gen_state():  # Iterating over keys (states)
+                for s in self.states:  # Iterating over keys (states)
                     a = self.policy.get(s, random.choice(self.actions))  # Policy action (or random)
                     old_v = self.values.get(s, 0)  # Initially zero (pp. 75)
                     new_v = self.bellman(s, a)
@@ -89,7 +106,7 @@ class MDP(object):
 
             # Policy Improvement
             unstable = False
-            for s in self.gen_state():
+            for s in self.states:
                 old_a = self.policy.get(s, random.choice(self.actions))
                 new_a = None
                 max_v = 0
@@ -113,20 +130,21 @@ class MDP(object):
             for b in range(1):  # FIXME delete battery level for now. Battery level 0low, 1high, -1fucked,[0, 100]
                 for i in range(int(math.pow(2, n))):  # clean & unclean
                     bi = "{0:b}".format(i).zfill(n)
-                    self.rooms_bi.append(bi)
                     s.append((bi, p - 1, b))
         return s
 
     def gen_trans_clean(self):
         t = dict()
-        n = len(self.rooms)
+        r = dict()
         for i in self.states:  # s
             pos = i[1]
             if pos == -1 or i[0][pos] != '0':
                 continue
             t[i] = dict()
-            t[i][i[0][:pos] + '1' + i[0][pos + 1:]] = 1
-        return t
+            r[i] = dict()
+            t[i][(i[0][:pos] + '1' + i[0][pos + 1:], i[1], i[2])] = 1
+            r[i][(i[0][:pos] + '1' + i[0][pos + 1:], i[1], i[2])] = self.rooms[pos+1].area * self.area_rate
+        return t, r
 
     def gen_trans_move(self):
         t = dict()
@@ -155,12 +173,30 @@ class MDP(object):
 
     def gen_trans_charge(self):
         t = dict()
+        r = dict()
         for i in self.states:  # s
             pos = i[1]
             if pos == -1:
                 t[i] = dict()
+                r[i] = dict()
                 t[i][i] = 1
-        return t
+                r[i][i] = self.charge_rate
+        return t, r
+
+    def gen_reward_move(self):
+        r = dict()
+
+        for i, s_p in self.transitions[0].items():  # 0move
+            r[i] = dict()
+            for j in s_p.keys():
+                r[i][j] = -self.distance_between_rooms(i[1] + 1, j[1] + 1) * self.dis_rate
+        return r
+
+    def gen_reward_clean(self):
+        pass
+
+    def gen_reward_charge(self):
+        pass
 
     def bellman(self, s, a) -> float:
         # Calculate part of the bellman equation for a state and current policy
@@ -225,8 +261,9 @@ class MDP(object):
         return self.battery - bat
 
     def distance_between_rooms(self, r1: int, r2: int) -> float:
-        c1 = self.rooms.get(r1).centre
-        c2 = self.rooms.get(r2).centre
+        c1 = self.rooms.get(r1).centre if r1 > 0 else self.charging_point
+        c2 = self.rooms.get(r2).centre if r2 > 0 else self.charging_point
+
         dis = np.linalg.norm(np.array([c1.x, c1.y, c1.z]) - np.array([c2.x, c2.y, c2.z]))
         return dis
 
@@ -254,7 +291,7 @@ class MDP(object):
         for i in self.rooms.values():
             self._pub_sweep.publish(i.img)
 
-        self.policy_iteration()
+        # self.policy_iteration()
 
     def do_sweeping(self, room_number: int) -> None:
         current_room = self.rooms.get(room_number)

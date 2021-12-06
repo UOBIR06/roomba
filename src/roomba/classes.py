@@ -5,13 +5,13 @@
 """
 from dataclasses import dataclass
 
-import geometry_msgs.msg
+from geometry_msgs.msg import Point32
 from sensor_msgs.msg import Image as SensorImage
 
 
 @dataclass
 class RoomInfo:
-    centre: geometry_msgs.msg.Point32 = None  # provides the (x,y)-coordinates of the room centre
+    centre: Point32 = Point32()  # provides the (x,y)-coordinates of the room centre
     # indices: list = None                      # 0 for free, 255 for unavailable
     id: int = 0                            # 0 for unavailable, 1-n is room number, 255 for free
                                             # (255 can be used for testing coverage)
