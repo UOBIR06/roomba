@@ -100,14 +100,17 @@ class Clean(object):
 
             # Check if charger (starting location) is this room
             if r.contains(pose):
+                rospy.loginfo(f'Charger is in room #{i}')
                 self.charger_room = i
-                start = self.charger_pose
+                start = pose
             else:
                 start = Pose2D(r.centre.x, r.centre.y, 0)
 
             # Get room coverage plan
             rospy.loginfo(f'Waiting for coverage in room #{i}...')
             r.path = self.get_coverage(r.image, result.map_resolution, result.map_origin, start)
+            for p in r.path:  # Change '/map' to 'map'
+                p.header.frame_id = 'map'
             r.cost = self.path_cost(r.path)
 
             self.rooms.append(r)
@@ -118,8 +121,8 @@ class Clean(object):
         goal.input_map = image
         goal.map_resolution = resolution
         goal.map_origin = origin
-        goal.robot_radius = 0.22  # Same as footprint
-        goal.coverage_radius = 0.22  # TODO: This (and robot_radius) makes move_base behave awkward
+        goal.robot_radius = 0.44  # Double the footprint
+        goal.coverage_radius = 0.44
         goal.starting_position = pose
         goal.planning_mode = 1  # Use the footprint, not FOV
 
@@ -231,6 +234,7 @@ class Clean(object):
 
             # (Re-)start with full battery and knowledge of previous visits
             sequence = self.solve_tsp(graph, visited, 100, self.charger_room, [])  # !!! THIS CAN BE SWAPPED-OUT !!! #
+            rospy.loginfo(f'Visiting rooms in sequence: {sequence}')
 
             # Update visited list
             for i in sequence:
