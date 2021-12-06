@@ -37,7 +37,7 @@ class Clean(object):
     def __init__(self):
         # Initialize variables
         self.battery = 100  # [0, 100]
-        self.loss_rate = 0.01  # 1 level lost every 100 cells
+        self.loss_rate = 0.05  # 1 level lost every 20 cells
         self.current_path = []  # Current path being followed
 
         # Get map
@@ -186,6 +186,8 @@ class Clean(object):
 
     def start(self):
         """With rooms and paths all configured, start cleaning."""
+
+        # Sanity checks
         if not self.rooms:
             rospy.logerr('No rooms found, aborting!')
             return
@@ -193,51 +195,17 @@ class Clean(object):
             rospy.logerr('Charger room not found, aborting!')
             return
 
-        # Create adjacency graph
-        N = len(self.rooms)
-        graph = []
-        for i in range(N):
-            row = []
-            for j in range(N):
-                if i == j:  # Cost of cleaning self
-                    row.append(self.rooms[i].cost)
-                    continue
+        # Get bins (i.e. trips)
+        rooms = {}
+        for i, r in enumerate(self.rooms):
+            rooms[i] = r.cost
+        bins = self.bin_packing_planner(rooms)
 
-                # Get path between rooms
-                if i != self.charger_room:
-                    start = self.rooms[i].path[-1]
-                else:  # Use the charger position instead
-                    start = self.charger_pose
-                end = self.rooms[j].path[0]
-                result = self.move_service(start, end, 0)
-                path = result.plan.poses
-
-                # Cost of going to room #j from #i
-                cost = self.path_cost(path)
-
-                # Also include cost of cleaning if not a return journey
-                if j != self.charger_room:
-                    cost += self.rooms[j].cost
-                row.append(cost)
-            graph.append(row)
-
-        # Repeat until all nodes visited
-        visited = [False] * N
-        while not all(visited):
-
-            # (Re-)start with full battery and knowledge of previous visits
-            sequence = self.solve_tsp(graph, visited, 100, self.charger_room, [])  # !!! THIS CAN BE SWAPPED-OUT !!! #
-            rospy.loginfo(f'Visiting rooms in sequence: {sequence}')
-
-            # Update visited list
-            for i in sequence:
-                visited[i] = True
-
-            # Convert room sequence to path:
-            # 1. `sequence[0]` is always `self.charger_room`
-            # 2. Return is *not* included in `sequence`
+        # Visit all the bins
+        for b in bins:
+            # Convert bin to path
             path = []
-            for i in sequence[1:]:  # Skip first room
+            for i in b:
                 path += self.rooms[i].path
             path.append(self.charger_pose)  # Return to charger
 
@@ -248,64 +216,19 @@ class Clean(object):
             while not rospy.is_shutdown() and self.current_path:
                 rospy.sleep(10)
 
-        # Finally, clean the charger room
-        self.send_goal(self.rooms[self.charger_room].path)
+        rospy.loginfo('All done cleaning!')
 
     # !!! Path planning methods !!! #
-
-    def solve_tsp(self, graph, visited, battery, this, path):
-        """Solve the Traveling Salesman Problem (TSP) with added element of battery."""
-        # TODO: Use a library, dingus.
-        # Reference: https://www-m9.ma.tum.de/games/tsp-game/index_en.html
-
-        # graph : adjacency matrix, row-major
-        # visited : boolean array
-        # battery : integer [0, 100]
-        # this : current node index
-
-        # Terminal condition: out of battery
-        back = graph[this][self.charger_room]  # Cost of going back to the charger
-        if battery < back:
-            return path
-
-        # Set current node as visited
-        visited = visited.copy()
-        visited[this] = True
-
-        # Add self to current path
-        stump = path.copy()
-        stump.append(this)
-        path = stump
-
-        # Terminal condition: all done
-        if all(visited):
-            return stump
-
-        # Iterate over all neighbours
-        neighbours = graph[this]
-        for i, v in enumerate(neighbours):
-
-            # Don't consider already visited (includes self)
-            if visited[i]:
-                continue
-
-            # Extend path by visiting neighbour, using a bit of battery
-            branch = self.solve_tsp(graph, visited, battery - v, i, stump)
-
-            # Keep the longest path
-            path = max(path, branch)
-
-        return path
 
     #uses bin packing to deteermine order of rooms to clean.
     #pass a dictionary with room no as key and its area as
     #the value
     def bin_packing_planner(self, roomsandareas):
         data = {}
-        data['weights'] = roomsandareas.values()
+        data['weights'] = list(roomsandareas.values())
         data['items'] = list(range(len(roomsandareas.keys())))
         data['bins'] = data['items']
-        data['bin_capacity'] = 150
+        data['bin_capacity'] = 100
 
         solver = pywraplp.Solver.CreateSolver('SCIP')
         # Variables
@@ -337,6 +260,7 @@ class Clean(object):
         status = solver.Solve()
 
         if status == pywraplp.Solver.OPTIMAL:
+            bins = []
             num_bins = 0.
             for j in data['bins']:
                 if y[j].solution_value() == 1:
@@ -352,10 +276,13 @@ class Clean(object):
                         print('  Items packed:', bin_items)
                         print('  Total weight:', bin_weight)
                         print()
+                        bins.append(bin_items)
             print()
             print('Number of bins used:', num_bins)
+            return bins
         else:
-            print('The problem does not have an optimal solution.')
+            rospy.logerr('The problem does not have an optimal solution.')
+            return []
 
 
 if __name__ == '__main__':
