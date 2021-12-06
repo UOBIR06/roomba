@@ -5,11 +5,11 @@ import tf
 import math
 import rospy
 import numpy as np
-from typing import List
 from roomba.grid import Grid
 from nav_msgs.srv import GetPlan
 from move_base_msgs.msg import *
 from sensor_msgs.msg import Image
+from typing import List, Optional
 from ipa_building_msgs.msg import *
 from nav_msgs.msg import OccupancyGrid
 from ortools.linear_solver import pywraplp
@@ -98,16 +98,19 @@ class Clean(object):
             r.image = gen_sensor_img_with_data(data, result.segmented_map)
             r.area = (size - np.count_nonzero(data)) * result.map_resolution
 
-            rospy.loginfo(f'Waiting for coverage in room #{i}...')
-            centre = Pose2D(r.centre.x, r.centre.y, 0)
-            r.path = self.get_coverage(r.image, result.map_resolution, result.map_origin, centre)
-            r.cost = self.path_cost(r.path)
-
-            self.rooms.append(r)
-
             # Check if charger (starting location) is this room
             if r.contains(pose):
                 self.charger_room = i
+                start = self.charger_pose
+            else:
+                start = Pose2D(r.centre.x, r.centre.y, 0)
+
+            # Get room coverage plan
+            rospy.loginfo(f'Waiting for coverage in room #{i}...')
+            r.path = self.get_coverage(r.image, result.map_resolution, result.map_origin, start)
+            r.cost = self.path_cost(r.path)
+
+            self.rooms.append(r)
 
     def get_coverage(self, image: Image, resolution: float, origin: Pose, pose: Pose2D) -> list:
         """Ask room_exploration_server for a path within given room image."""
@@ -166,8 +169,13 @@ class Clean(object):
             cost += self.battery_lost(p1, p2)
         return cost
 
-    def send_goal(self, p: PoseStamped):
+    def send_goal(self, path=None):
         """Send navigation goal to move_base."""
+        if path:  # Assign new path
+            self.current_path = path
+
+        # Send navigation goal
+        p = self.current_path[0]
         rospy.loginfo(f'Next goal: <{p.pose.position.x}, {p.pose.position.y}>')
         goal = MoveBaseGoal()
         goal.target_pose = p
@@ -178,10 +186,14 @@ class Clean(object):
     def follow_path(self, status: GoalStatus, _: MoveBaseActionResult):
         """Send the next pose in path as a goal."""
         if self.current_path:
+            # Update battery level
             past = self.current_path.pop(0)
             now = self.current_path[0]
             self.battery -= self.battery_lost(past, now)
-            self.send_goal(now)
+            rospy.loginfo(f'Battery level: {self.battery}')
+
+            # Keep following path
+            self.send_goal()
 
     def start(self):
         """With rooms and paths all configured, start cleaning."""
@@ -191,26 +203,25 @@ class Clean(object):
         for i in range(N):
             row = []
             for j in range(N):
-                # Starting position (centre of room #i)
-                p1 = self.rooms[i].centre
-                start = PoseStamped()
-                start.header.frame_id = 'map'
-                start.pose.position = Point(p1.x, p1.y, 0)
-                start.pose.orientation = Quaternion(0, 0, 0, 1)
-
-                # Ending position (centre of room #j)
-                p2 = self.rooms[j].centre
-                end = PoseStamped()
-                end.header.frame_id = 'map'
-                end.pose.position = Point(p2.x, p2.y, 0)
-                end.pose.orientation = Quaternion(0, 0, 0, 1)
+                if i == j:  # Cost of cleaning self
+                    row.append(self.rooms[i].cost)
+                    continue
 
                 # Get path between rooms
+                if i != self.charger_room:
+                    start = self.rooms[i].path[-1]
+                else:  # Use the charger position instead
+                    start = self.charger_pose
+                end = self.rooms[j].path[0]
                 result = self.move_service(start, end, 0)
                 path = result.plan.poses
 
-                # Battery used between #i and #j and within room #j
-                cost = self.path_cost(path) + self.rooms[j].cost
+                # Cost of going to room #j from #i
+                cost = self.path_cost(path)
+
+                # Also include cost of cleaning if not a return journey
+                if j != self.charger_room:
+                    cost += self.rooms[j].cost
                 row.append(cost)
             graph.append(row)
 
@@ -219,7 +230,7 @@ class Clean(object):
         while not all(visited):
 
             # (Re-)start with full battery and knowledge of previous visits
-            sequence = self.solve_tsp(graph, visited, 100, 0, [])  # !!! THIS CAN BE SWAPPED-OUT !!! #
+            sequence = self.solve_tsp(graph, visited, 100, self.charger_room, [])  # !!! THIS CAN BE SWAPPED-OUT !!! #
 
             # Update visited list
             for i in sequence:
@@ -234,12 +245,14 @@ class Clean(object):
             path.append(self.charger_pose)  # Return to charger
 
             # Start following path
-            self.current_path = path
-            self.send_goal(path[0])
+            self.send_goal(path)
 
             # Wait until path complete before doing another round
             while not rospy.is_shutdown() and self.current_path:
                 rospy.sleep(10)
+
+        # Finally, clean the charger room
+        self.send_goal(self.rooms[self.charger_room].path)
 
     # !!! Path planning methods !!! #
 
