@@ -130,31 +130,16 @@ class Clean(object):
         result = self.ipa_exp.get_result()
         path = result.coverage_path_pose_stamped
 
-        # TODO: For @Jacob
-        # The `path` variable (see just above) is an array of PoseStamped objects.
-        # They make-up the path our robot will follow to sweep a room. The issue is
-        # that they're way too many of them. Let me give you an example:
-        #
-        # s - x - x - x - x
-        #                 |
-        # e - x - x - x - x
-        #
-        # 's' is where the robot starts cleaning, 'e' is where it ends, each 'x' is
-        # a PoseStamped along the path. Notice how it can be greatly simplified down
-        # to just a simple path:
-        #
-        # s - - - - - - - x
-        #                 |
-        # e - - - - - - - x
-        #
-        # This is much better because with many 'x's `move_base` does a lot of start-stop,
-        # and just like a car it accelerates and decelerates. It all takes too long.
-        # So, if you can simplify the path so that poses going in the same direction for
-        # a while are removed and we're just left with those that have a significant turning
-        # angle (i.e. orientation/heading), that would be great. Oh, and make sure you return
-        # the simplified path at the end (see below).
-
+         #for each posestamped in the path
+        #except the first and last obvs
+        for i in range (1, len(path)):
+            #compare its orientation to predecessor
+            prevorientation = path(i-1).pose.orientation.z
+            #if the difference in orientation is not equalto /greater than π
+            if math.pi > abs(prevorientation - path(i).pose.orientation.z):
+                path.pop(i)
         return path
+
 
     def battery_lost(self, p1: PoseStamped, p2: PoseStamped) -> float:
         """Amount of battery lost traveling between poses."""
