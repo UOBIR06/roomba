@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import cv2
 
 import tf
 import math
@@ -14,7 +15,7 @@ from nav_msgs.msg import OccupancyGrid
 from ortools.linear_solver import pywraplp
 from actionlib import SimpleActionClient, GoalStatus
 from roomba.util import getHeading, gen_sensor_img_with_data, grid_to_sensor_image
-from geometry_msgs.msg import PoseStamped, Pose2D, Pose, Point32, Polygon
+from geometry_msgs.msg import PoseStamped, Pose2D, Pose, Point, Point32, Polygon, Quaternion
 
 
 class Room:
@@ -67,7 +68,7 @@ class Clean(object):
         rospy.loginfo('Waiting for move_base...')
         self.move_client = SimpleActionClient('move_base', MoveBaseAction)
         self.move_client.wait_for_server()
-        self.move_service = rospy.ServiceProxy('nav', GetPlan, True)
+        self.move_service = rospy.ServiceProxy('/nav/make_plan', GetPlan, True)
 
         # Get map segmentation
         goal = MapSegmentationGoal()
@@ -87,17 +88,15 @@ class Clean(object):
         self.rooms = []
         self.charger_room = -1
 
-        li = [x if 0 < x <= len(result.room_information_in_meter) else 0 for x in result.segmented_map.data]
-        total_map_area = np.count_nonzero(li)
+        image = np.frombuffer(result.segmented_map.data, dtype=np.intc)
+        size = 255 * len(image)
         for i, info in enumerate(result.room_information_in_meter):
             r = Room()
             r.centre = info.room_center
             r.bounds = info.room_min_max
-            data = [0 if x == i + 1 else 255 for x in li]
-            r.area = (len(data) - np.count_nonzero(data)) / total_map_area
-            if r.area < 0.001:
-                continue  # Reject small rooms
+            data = [255 if x == i + 1 else 0 for x in image]
             r.image = gen_sensor_img_with_data(data, result.segmented_map)
+            r.area = (size - np.count_nonzero(data)) * result.map_resolution
 
             rospy.loginfo(f'Waiting for coverage in room #{i}...')
             centre = Pose2D(r.centre.x, r.centre.y, 0)
@@ -168,13 +167,25 @@ class Clean(object):
         for i in range(N):
             row = []
             for j in range(N):
-                # Get path between rooms
-                start = self.rooms[i].centre
-                end = self.rooms[j].centre
-                result = self.move_service(start, end, 0)
-                path = result.poses
+                # Starting position (centre of room #i)
+                p1 = self.rooms[i].centre
+                start = PoseStamped()
+                start.header.frame_id = 'map'
+                start.pose.position = Point(p1.x, p1.y, 0)
+                start.pose.orientation = Quaternion(0, 0, 0, 1)
 
-                # Sum up distance to room + within room
+                # Ending position (centre of room #j)
+                p2 = self.rooms[j].centre
+                end = PoseStamped()
+                end.header.frame_id = 'map'
+                end.pose.position = Point(p2.x, p2.y, 0)
+                end.pose.orientation = Quaternion(0, 0, 0, 1)
+
+                # Get path between rooms
+                result = self.move_service(start, end, 0)
+                path = result.plan.poses
+
+                # Battery used between #i and #j and within room #j
                 cost = self.path_cost(path) + self.rooms[j].cost
                 row.append(cost)
             graph.append(row)
@@ -210,6 +221,9 @@ class Clean(object):
 
     def solve_tsp(self, graph, visited, battery, this, path):
         """Solve the Traveling Salesman Problem (TSP) with added element of battery."""
+        # TODO: Use a library, dingus.
+        # Reference: https://www-m9.ma.tum.de/games/tsp-game/index_en.html
+
         # graph : adjacency matrix, row-major
         # visited : boolean array
         # battery : integer [0, 100]
