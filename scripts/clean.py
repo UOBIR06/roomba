@@ -227,6 +227,7 @@ class Clean(object):
             path = []
             for i in b:
                 path += self.rooms[i].path
+                path.append(None)  # Signal to stop using battery between rooms
             path.append(self.charger_pose)  # Return to charger
 
             # Start following path
