@@ -18,5 +18,5 @@
     <include file="$(find roomba)/launch/clean_base.launch"/>
 
     <!-- Our node :) -->
-    <!--node name="clean" pkg="roomba" type="clean.py"/-->
+    <node name="clean" pkg="roomba" type="clean.py" />
 </launch>

@@ -37,7 +37,7 @@ class Clean(object):
     def __init__(self):
         # Initialize variables
         self.battery = 100.0  # [0, 100]
-        self.loss_rate = 0.05  # 1 level lost every 20 cells
+        self.loss_rate = 0.02  # 1 level lost every 20 cells
         self.current_path = []  # Current path being followed
         self.current_index = 0
         self.last_distance = 0  # Distance to current goal (every 10 seconds)
@@ -127,8 +127,8 @@ class Clean(object):
         goal.input_map = image
         goal.map_resolution = resolution
         goal.map_origin = origin
-        goal.robot_radius = 0.22  # Same as footprint
-        goal.coverage_radius = 0.22  # Double as footprint
+        goal.robot_radius = 0.25  # Same as footprint
+        goal.coverage_radius = 0.25  # Double as footprint
         goal.starting_position = pose
         goal.planning_mode = 1  # Use the footprint, not FOV
 
@@ -241,7 +241,7 @@ class Clean(object):
             for i in b:
                 path += self.rooms[i].path
                 path.append(None)  # Signal to stop using battery between rooms
-            path.append(self.charger_pose)  # Return to charger
+            path.append([self.charger_pose, None])  # Return to charger
 
             # Start following path
             rospy.loginfo('Starting new path...')
