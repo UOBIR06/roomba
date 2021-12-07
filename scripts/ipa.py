@@ -4,17 +4,16 @@
 @author ir06
 @date 23/11/2021
 """
-import sys
-import os
-import actionlib
-import rospy
-import rospkg
 
+import rospy
+import actionlib
 from ipa_building_msgs.msg import MapSegmentationAction, MapSegmentationGoal, MapSegmentationResult, \
-    RoomExplorationAction, RoomExplorationGoal, RoomExplorationResult
+    RoomExplorationAction, RoomExplorationGoal, RoomExplorationResult, RoomInformation
 from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import Pose2D
-from sensor_msgs.msg import Image as SensorImage
+from sensor_msgs.msg import Image as SensorImage, PointCloud, ChannelFloat32
+from std_msgs.msg import Header
+from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult
 from roomba import util
 
 
@@ -23,6 +22,7 @@ class RoomIPA(object):
         # define publishers
         self._pub_seg = rospy.Publisher('/roomba/segmented_map', MapSegmentationResult, queue_size=0)
         self._pub_exp = rospy.Publisher('/roomba/explored_map', RoomExplorationResult, queue_size=0)
+        self._pub_rooms = rospy.Publisher('/roomba/rooms_centre', PointCloud, queue_size=20)
 
         # Get an action client
         self._sac_seg = actionlib.SimpleActionClient('/room_segmentation/room_segmentation_server',
@@ -51,12 +51,23 @@ class RoomIPA(object):
         goal.map_origin = msg.info.origin
         goal.return_format_in_pixel = True
         goal.return_format_in_meter = True
-        goal.robot_radius = 0.22  # Same as footprint
-        goal.room_segmentation_algorithm = 3
+        goal.robot_radius = 1  # Same as footprint
+        goal.room_segmentation_algorithm = 2
 
         rospy.loginfo("Waiting for segmentation reply...")
         self._sac_seg.send_goal_and_wait(goal)
-        res = self._sac_seg.get_result()
+        res: MapSegmentationResult = self._sac_seg.get_result()
+
+        rospy.loginfo('[mdp]got %d rooms.' % len(res.room_information_in_pixel))
+        points_arr = [x.room_center for x in res.room_information_in_pixel]
+        clouds: PointCloud = PointCloud(
+            header=Header(frame_id='map'),
+            points=points_arr,
+            channels=[ChannelFloat32(name='rgb', values=[11 for _ in points_arr])]
+        )
+        # publish rooms centres for viz
+        self._pub_rooms.publish(clouds)
+
         self._pub_seg.publish(res)
         return res
 
