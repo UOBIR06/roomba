@@ -15,7 +15,7 @@
     <node name="amcl" pkg="amcl" type="amcl" args="scan:=base_scan"/>
 
     <!-- move_base -->
-    <include file="$(find roomba)/launch/explore_base.launch"/>
+    <include file="$(find roomba)/launch/clean_base.launch"/>
 
     <!-- Our node :) -->
     <!--node name="clean" pkg="roomba" type="clean.py"/-->
