@@ -15,7 +15,7 @@ from nav_msgs.msg import OccupancyGrid
 from ortools.linear_solver import pywraplp
 from actionlib import SimpleActionClient, GoalStatus
 from roomba.util import getHeading, gen_sensor_img_with_data, grid_to_sensor_image
-from geometry_msgs.msg import PoseStamped, Pose2D, Pose, Point, Point32, Polygon, Quaternion
+from geometry_msgs.msg import PoseStamped, Pose2D, Pose, Point, Point32, Polygon, Quaternion, PoseWithCovarianceStamped
 
 
 class Room:
@@ -44,17 +44,24 @@ class Clean(object):
 
         # Get map
         rospy.loginfo('Waiting for map...')
-        grid = rospy.wait_for_message('/map', OccupancyGrid)  # TODO: Change to '/roomba/map_ready' later
+        grid = rospy.wait_for_message('/roomba/map_ready', OccupancyGrid)  # TODO: Change to '/roomba/map_ready' later
         self.grid = Grid(grid)
         image = grid_to_sensor_image(grid)
 
         # Get current pose
         rospy.loginfo('Waiting for pose transform...')
-        self.tf_listener = tf.TransformListener()
-        self.tf_listener.waitForTransform('base_link', 'map', rospy.Time(), rospy.Duration(10))
+ 
+        initial_pos = rospy.wait_for_message('/initialpose', PoseWithCovarianceStamped)
+        pose = initial_pos.pose.pose
 
-        self.charger_pose = self.get_pose()
-        pose = self.charger_pose.pose
+        # listener = tf.TransformListener()
+        # listener.waitForTransform('base_link', 'map', rospy.Time(), rospy.Duration(10))
+        #
+        # pose = PoseStamped()
+        # pose.header.frame_id = 'base_link'
+        # pose.header.stamp = rospy.Time()
+        # self.charger_pose = listener.transformPose('map', pose)
+        # pose = self.charger_pose.pose
         pose = Pose2D(x=pose.position.x, y=pose.position.y, theta=getHeading(pose.orientation))
 
         # Setup action client(s)
