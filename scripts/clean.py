@@ -13,7 +13,7 @@ from typing import List, Optional
 from ipa_building_msgs.msg import *
 from nav_msgs.msg import OccupancyGrid
 from ortools.linear_solver import pywraplp
-from actionlib import SimpleActionClient, GoalStatus
+from actionlib import SimpleActionClient, GoalStatus, GoalID
 from roomba.util import getHeading, gen_sensor_img_with_data, grid_to_sensor_image
 from geometry_msgs.msg import PoseStamped, Pose2D, Pose, Point, Point32, Polygon, Quaternion, PoseWithCovarianceStamped
 
@@ -37,9 +37,17 @@ class Clean(object):
     def __init__(self):
         # Initialize variables
         self.battery = 100.0  # [0, 100]
-        self.loss_rate = 0.05  # 1 level lost every 20 cells
+        self.loss_rate = 0.03  # 1 level lost every 33 cells
+
+        self.current_bin = []  # Current sequence of rooms
         self.current_path = []  # Current path being followed
-        self.current_index = 0
+        self.bin_index = 0  # Index within bin
+        self.path_index = 0  # Index within path
+
+        self.at_charger = True  # Flag to indicate end of bin
+        self.returning = False  # Flag to indicate heading to charger
+
+        self.last_id = None
         self.last_distance = 0  # Distance to current goal (every 10 seconds)
         self.last_goal = None  # Latest goal sent to move_base
         self.last_time = None  # Last time progress was made
@@ -181,41 +189,64 @@ class Clean(object):
             cost += self.battery_lost(p1, p2)
         return cost
 
-    def send_goal(self, p: PoseStamped, silent=False):
+    def send_goal(self, p: PoseStamped):
         """Send navigation goal to move_base."""
-        if not silent:
-            rospy.loginfo(f'Next goal: <{p.pose.position.x}, {p.pose.position.y}>')
+        rospy.loginfo(f'Next goal: <{p.pose.position.x}, {p.pose.position.y}>')
+
         goal = MoveBaseGoal()
         goal.target_pose = p
         goal.target_pose.header.frame_id = 'map'
         goal.target_pose.header.stamp = rospy.Time()
         self.move_client.send_goal(goal, done_cb=self.follow_path)
 
+    def get_next_goal(self) -> Optional[PoseStamped]:
+        """Get the next goal in path, or bin, or nothing."""
+        # Update indices
+        self.path_index += 1
+        if self.path_index >= len(self.current_path):
+            self.path_index = 0
+
+            # Done with current bin, no more goals
+            self.bin_index += 1
+            if self.bin_index >= len(self.current_bin):
+                return None
+
+            # More rooms to clean
+            r = self.current_bin[self.bin_index]
+            self.current_path = self.rooms[r].path
+
+        # Return next goal
+        return self.current_path[self.path_index]
+
+    def send_next_goal(self):
+        """Send the next goal in line."""
+        goal = self.get_next_goal()
+        if goal is None:
+            rospy.loginfo('Returning to recharge')
+            self.returning = True
+            self.send_goal(self.charger_pose)
+        else:
+            self.send_goal(goal)
+
     def follow_path(self, status: GoalStatus, _: MoveBaseActionResult):
         """Send the next pose in path as a goal."""
-        if len(self.current_path) > 1:
-            # Update battery level
-            past = self.current_path[0]
-            now = self.current_path[1]
 
-            if now is None:
-                rospy.loginfo(f'Moving onto next room...')
-                self.current_path.pop(0)
-                self.send_goal(self.current_path[1])
-            elif past is None:
-                self.current_path.pop(0)
-                self.send_goal(self.current_path[0], True)
-            else:
-                self.current_path.pop(0)
-                self.battery = max(0.0, self.battery - self.battery_lost(past, now))
-                if self.battery > 0:
-                    rospy.loginfo(f'Battery level: {self.battery}')
-                    self.send_goal(now)
-                else:
-                    rospy.logerr('Out of battery!')
-        else:
-            rospy.logwarn('End of path!')
-            self.current_path = []
+        # If we were returning, now we're done
+        if self.returning:
+            self.at_charger = True
+            return
+
+        if self.path_index > 0:  # Update battery level
+            past = self.current_path[self.path_index - 1]
+            now = self.current_path[self.path_index]
+            self.battery = max(0.0, self.battery - self.battery_lost(now, past))
+            rospy.loginfo(f'Battery: {self.battery}')
+
+            if self.battery == 0:
+                rospy.logerr('Out of battery!')
+                return
+
+        self.send_next_goal()
 
     def start(self):
         """With rooms and paths all configured, start cleaning."""
@@ -236,45 +267,48 @@ class Clean(object):
 
         # Visit all the bins
         for b in bins:
-            # Convert bin to path
-            path = [self.charger_pose, None]  # Start at charger
-            for i in b:
-                path += self.rooms[i].path
-                path.append(None)  # Signal to stop using battery between rooms
-            path.append(self.charger_pose)  # Return to charger
+            # Set current bin
+            self.current_bin = b
+            self.bin_index = 0
 
-            # Start following path
-            rospy.loginfo('Starting new path...')
-            self.current_path = path
-            self.send_goal(path[0])
+            # Set current path
+            r = self.current_bin[self.bin_index]
+            self.current_path = self.rooms[r].path
+            self.path_index = 0
 
-            # Wait until path complete before doing another round
-            while not rospy.is_shutdown() and self.current_path:
+            # Start cleaning
+            self.battery = 100  # Start on full charge
+            self.at_charger = False
+            self.send_goal(self.current_path[0])
+
+            # Wait until round complete before going again
+            while not rospy.is_shutdown() and not self.at_charger:
                 rospy.sleep(2)
 
-                goal = self.current_path[0]
-                if goal is not None and goal is not self.charger_pose:
-                    # Check if we've made progress
-                    d = self.get_distance(self.get_pose(), goal)
-                    same = self.last_goal == goal
+                if self.battery == 0:
+                    return
+
+                if not self.returning:
+                    goal = self.current_path[self.path_index]
+                    same_goal = self.last_goal == goal
                     self.last_goal = goal
-                    if not same or self.last_distance > d:
-                        self.last_distance = d
+
+                    pose = self.get_pose()
+                    distance = self.get_distance(pose, goal)
+
+                    if not same_goal or self.last_distance > distance:
+                        self.last_distance = distance
                         self.last_time = rospy.get_time()
 
-                    # Check if we need to timeout
                     if rospy.get_time() - self.last_time > self.timeout:
                         rospy.logwarn(f'No progress for {self.timeout} seconds, moving on...')
-                        self.current_path.pop(0)
-                        self.send_goal(self.current_path[0])
+                        self.send_next_goal()
 
         rospy.loginfo('All done cleaning!')
 
-    # !!! Path planning methods !!! #
-
-    #uses bin packing to deteermine order of rooms to clean.
-    #pass a dictionary with room no as key and its area as
-    #the value
+    # Uses bin packing to determine order of rooms to clean.
+    # Pass a dictionary with room no. as key and its area as
+    # the value
     def bin_packing_planner(self, roomsandareas):
         data = {}
         data['weights'] = list(roomsandareas.values())
