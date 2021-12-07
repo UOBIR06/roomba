@@ -128,7 +128,7 @@ class Clean(object):
         goal.map_resolution = resolution
         goal.map_origin = origin
         goal.robot_radius = 0.22  # Same as footprint
-        goal.coverage_radius = 0.44  # Double as footprint
+        goal.coverage_radius = 0.22  # Double as footprint
         goal.starting_position = pose
         goal.planning_mode = 1  # Use the footprint, not FOV
 
