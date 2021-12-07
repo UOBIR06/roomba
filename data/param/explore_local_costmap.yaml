@@ -23,4 +23,4 @@ local_costmap:
             clearing: true
 
     inflation_layer:
-        inflation_radius: 0.1  # Let robot squeeze into some spaces
+        inflation_radius: 0.2

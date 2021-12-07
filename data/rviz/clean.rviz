@@ -3,7 +3,9 @@ Panels:
     Help Height: 78
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
+      Expanded:
+        - /Static Map1
+        - /CoveragePath1
       Splitter Ratio: 0.5
     Tree Height: 741
   - Class: rviz/Selection
@@ -55,21 +57,28 @@ Visualization Manager:
       Color Scheme: map
       Draw Behind: false
       Enabled: true
-      Name: Map Slam
-      Topic: /map
-      Unreliable: false
-      Use Timestamp: false
-      Value: true
-    - Alpha: 0.699999988079071
-      Class: rviz/Map
-      Color Scheme: map
-      Draw Behind: false
-      Enabled: true
-      Name: Map ready
+      Name: Static Map
       Topic: /roomba/map_ready
       Unreliable: false
       Use Timestamp: false
       Value: true
+    - Alpha: 1
+      Arrow Length: 0.30000001192092896
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.009999999776482582
+      Class: rviz/PoseArray
+      Color: 255; 25; 0
+      Enabled: false
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
+      Name: Particle Cloud
+      Queue Size: 10
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
+      Shape: Arrow (Flat)
+      Topic: /particlecloud
+      Unreliable: false
+      Value: false
     - Alpha: 1
       Class: rviz/Polygon
       Color: 239; 41; 41
@@ -182,18 +191,8 @@ Visualization Manager:
       Marker Topic: /marker
       Name: Marker
       Namespaces:
-        point: true
+        {}
       Queue Size: 1000
-      Value: true
-    - Alpha: 0.699999988079071
-      Class: rviz/Map
-      Color Scheme: map
-      Draw Behind: false
-      Enabled: true
-      Name: Map Segmented
-      Topic: /room_segmentation/room_segmentation_server/segmented_map
-      Unreliable: false
-      Use Timestamp: false
       Value: true
     - Alpha: 1
       Buffer Length: 100
@@ -218,6 +217,16 @@ Visualization Manager:
       Shaft Length: 0.10000000149011612
       Topic: /room_exploration/room_exploration_server/coverage_path
       Unreliable: false
+      Value: true
+    - Alpha: 0.699999988079071
+      Class: rviz/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic: /room_segmentation/room_segmentation_server/segmented_map
+      Unreliable: false
+      Use Timestamp: false
       Value: true
   Enabled: true
   Global Options:
@@ -247,7 +256,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 85.5191879272461
+      Distance: 19.534250259399414
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -255,17 +264,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 18.01815414428711
-        Y: 17.51013946533203
-        Z: 0.9655133485794067
+        X: 19.224918365478516
+        Y: 14.468853950500488
+        Z: -0.0006176906754262745
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5397963523864746
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 4.702391147613525
+      Yaw: 4.712387561798096
     Saved:
       - Class: rviz/Orbit
         Distance: 30
@@ -303,5 +312,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 958
-  X: 0
+  X: 960
   Y: 17
