@@ -80,8 +80,8 @@ class Clean(object):
         goal.map_origin = self.grid.info.origin
         goal.return_format_in_pixel = True
         goal.return_format_in_meter = True
-        goal.robot_radius = 0.22  # Same as footprint
-        goal.room_segmentation_algorithm = 3
+        goal.robot_radius = 0.22  # Same as footprint Doesn't really matter
+        goal.room_segmentation_algorithm = 2
 
         rospy.loginfo('Waiting for segmentation...')
         self.ipa_seg.send_goal_and_wait(goal)
@@ -128,7 +128,7 @@ class Clean(object):
         goal.map_resolution = resolution
         goal.map_origin = origin
         goal.robot_radius = 0.22  # Same as footprint
-        goal.coverage_radius = 0.44  # Double as footprint
+        goal.coverage_radius = 0.22  # Double as footprint
         goal.starting_position = pose
         goal.planning_mode = 1  # Use the footprint, not FOV
 
