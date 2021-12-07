@@ -14,5 +14,5 @@
     </node>
 
     <!-- Our node :) -->
-    <!--node name="explore" pkg="roomba" type="explore.py"/-->
+    <node name="explore" pkg="roomba" type="explore.py"/>
 </launch>
