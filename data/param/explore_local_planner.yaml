@@ -3,3 +3,4 @@ TrajectoryPlannerROS:
     vx_samples: 6  # Take more samples of x velocity space
     oscillation_reset_dist: 0.1  # At least two cells travel before reset
     escape_vel: -1.0
+    occdist_scale: 0.001
