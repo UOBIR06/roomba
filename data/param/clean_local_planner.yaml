@@ -1,5 +1,6 @@
 TrajectoryPlannerROS:
     holonomic_robot: false # Cannot strafe
     vx_samples: 6  # Take more samples of x velocity space
-    xy_goal_tolerance: 0.22  # Any spot on the robot is goal reached
+    xy_goal_tolerance: 0.2  # Any spot on the robot is goal reached
     latch_xy_goal_tolerance: true  # Rotate in place when goal reached
+    pdist_scale: 5.0  # Follow the global plan absolutely
