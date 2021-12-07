@@ -8,11 +8,15 @@
     <include file="$(find roomba)/launch/explore_base.launch"/>
 
     <!-- SLAM gmapping -->
-    <node name="slam" pkg="gmapping" type="slam_gmapping" args="scan:=base_scan">
+    <node name="slam" pkg="gmapping" type="slam_gmapping" args="scan:=base_scan" output="log">
         <!-- Publish period =1 silences timing errors -->
         <param name="transform_publish_period" value="1"/>
     </node>
 
     <!-- Our node :) -->
-    <node name="explore" pkg="roomba" type="explore.py"/>
+    <node name="explore" pkg="roomba" type="explore.py" output="screen"/>
+
+    <!-- Data gathering -->
+    <arg name="debug" default="0"/>
+    <node name="coverage" pkg="roomba" type="coverage.py" output="screen" if="$(arg debug)"/>
 </launch>
