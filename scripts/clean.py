@@ -181,9 +181,10 @@ class Clean(object):
             cost += self.battery_lost(p1, p2)
         return cost
 
-    def send_goal(self, p: PoseStamped):
+    def send_goal(self, p: PoseStamped, silent=False):
         """Send navigation goal to move_base."""
-        rospy.loginfo(f'Next goal: <{p.pose.position.x}, {p.pose.position.y}>')
+        if not silent:
+            rospy.loginfo(f'Next goal: <{p.pose.position.x}, {p.pose.position.y}>')
         goal = MoveBaseGoal()
         goal.target_pose = p
         goal.target_pose.header.frame_id = 'map'
@@ -203,10 +204,11 @@ class Clean(object):
                 self.send_goal(self.current_path[1])
             elif past is None:
                 self.current_path.pop(0)
-                self.send_goal(self.current_path[0])
+                self.send_goal(self.current_path[0], True)
             else:
+                self.current_path.pop(0)
                 self.battery = max(0.0, self.battery - self.battery_lost(past, now))
-                if self.battery > 0:  # Keep going
+                if self.battery > 0:
                     rospy.loginfo(f'Battery level: {self.battery}')
                     self.send_goal(now)
                 else:

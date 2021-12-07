@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
     <!-- Visualizer and simulator -->
-    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/explore.rviz"/>
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/clean.rviz"/>
     <include file="$(find roomba)/launch/simulator.launch"/>
 
     <!-- Map server (for debug) -->
