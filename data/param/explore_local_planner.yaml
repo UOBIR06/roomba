@@ -1,3 +1,4 @@
 TrajectoryPlannerROS:
     holonomic_robot: false # Cannot strafe
     vx_samples: 6  # Take more samples of x velocity space
+    occdist_scale: 0.1  # Try to avoid obstacles more

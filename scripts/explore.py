@@ -161,7 +161,7 @@ class Explorer(object):
         queue = [(x, y)]
         visit = {}
         while queue:
-            cell = queue.pop()
+            cell = queue.pop(0)
             visit[cell] = True
 
             if self.get_cell(*cell) == self.FREE_CELL:
