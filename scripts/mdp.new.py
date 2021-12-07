@@ -1,45 +1,40 @@
 #!/usr/bin/python3
 
-import os
-import struct
-import sys
 import rospy
 import math
-import cv_bridge
 import random
 import numpy as np
-from rospy.numpy_msg import numpy_msg
-from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import Point32
-from sensor_msgs.msg import Image as SensorImage
-from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult, RoomInformation
+from sensor_msgs.msg import Image as SensorImage, PointCloud, ChannelFloat32
+from std_msgs.msg import Header
+from ipa_building_msgs.msg import MapSegmentationResult, RoomExplorationResult
 from roomba import util
 from roomba.classes import RoomInfo
+from copy import deepcopy
+
+from src.roomba.scripts.rooms import mock
 
 
 class MDP(object):
     def __init__(self):
 
         # segmentation related
-        self.rooms = dict()  # room centres for each element, key corresponding with room number, starting from 1 !!
+        self.rooms = dict()  # room_number: RoomInfo, room_number starting from 1 !!
 
         # Do sweeping
         self._pub_sweep = rospy.Publisher('/roomba/sweep_grid', SensorImage, queue_size=20)
+        self._pub_rooms = rospy.Publisher('/roomba/rooms_centre', PointCloud, queue_size=20)
 
         # Get initial map
-        grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
+        # grid = rospy.wait_for_message("/map", OccupancyGrid)  # TODO: Change this to '/roomba/map_ready' later
         # self.map_info = grid.info
 
-        # Do segmentation
-        seg_map = rospy.wait_for_message("/roomba/segmented_map", MapSegmentationResult)
-        self.get_segmented_map(seg_map)
-        # self._sub_segmented_map = rospy.Subscriber('/roomba/segmented_map', MapSegmentationResult,
-        #                                            self.get_segmented_map)
+        # Do segmentation #fixme uncomment
+        # seg_map = rospy.wait_for_message("/roomba/segmented_map", MapSegmentationResult)
+        # self.get_segmented_map(seg_map)
 
         # # TODO test data
-        # self.rooms[1] = RoomInfo()
-        # self.rooms[2] = RoomInfo()
-        # self.rooms[3] = RoomInfo()
+        self.rooms = {1: mock.get(1), 2: mock.get(2), 3: mock.get(3)}
         # # TODO test data
 
         self.charging_point = Point32()  # where battery is can be initial point?
@@ -48,6 +43,14 @@ class MDP(object):
         self.dis_rate = 1.0  # TODO find some proper number
         self.gamma = 0.8  # TODO: Tweak this
         self.battery_loss_rate = 0.01  # TODO: Tweak this
+
+        self.values = {}
+        self.policy = {}
+        self.battery = 100  # Battery level [0, 100]
+
+        # TODO: Populate according to # of rooms + recharge
+        #   -1 : recharge
+        #   [0, inf] : clean room x
 
         # States are tuples: (r0, ..., rn, pose, battery)
         #   r0, ..., rn : cleanliness state of room i
@@ -58,14 +61,6 @@ class MDP(object):
         #   pose = state[-2]
         #   battery = state[-1]
         #   ri = state[i]
-        self.values = {}
-        self.policy = {}
-        self.battery = 100  # Battery level [0, 100]
-
-        # TODO: Populate according to # of rooms + recharge
-        #   -1 : recharge
-        #   [0, inf] : clean room x
-
         self.states = self.gen_state()
         # Perhaps simpler to just use a number i.e self.actions = self.num_rooms
         self.actions = [0, 1, 2]  # 0move 1clean,2charge
@@ -83,18 +78,65 @@ class MDP(object):
         (self.transitions[1], self.rewards[1]) = self.gen_trans_clean()
         (self.transitions[2], self.rewards[2]) = self.gen_trans_charge()
 
+        # self.value_iteration()
         self.policy_iteration()
 
+        start = (''.zfill(len(self.rooms)), -1, 0)
+        end = (start[0].replace('0', '1'), -1, 0)
+        next = start
+        while next and next != end:
+            a = self.policy.get(next)
+            print('state %s action %d', next, a)
+
+    def get_rewards(self, s0, a, s1):
+        return self.rewards.get(a).get(s0).get(s1)
+
+    def value_iteration(self):
+        # See RL book pp. 82, section 4.4
+        l = len(self.states)
+        # init
+        # for i in self.states:
+        #     self.values[i] = {}
+        # self.values = np.zeros(l, l)
+
+        self.values = np.zeros(l)
+        # self.values[self.states.index((''.zfill(len(self.rooms)).replace('0','1'), -1, 0))] = 1
+        v_new = deepcopy(self.values)
+
+        delta = math.inf
+
+        print('start')
+        step = 0
+        while delta > 1:
+            step += 1
+            for i, v in enumerate(self.values):
+                s0 = self.states[i]
+                v_new[i] = v + max(
+                    sum([
+                        self.rewards[a].get(s0, {}).get(s, -1.0) * t
+                        for s, t in self.transitions[a].get(s0, {}).items()
+                    ])
+                    for a in self.actions[:-1]
+
+                    # [-1.9826561588729594, -2.4177882244996267, -2.076355095028755, -2.9334279861856727, -2.321422104954363, -2.3527431372932686, -2.0576321043338335, -2.3208619218454634, -2.6629353840488026, -2.4020044138357255]
+                )
+
+            delta = np.linalg.norm(self.values - v_new)
+            self.values = v_new
+        print('end at %d', step)
 
     def policy_iteration(self):
         # See RL book pp. 80, section 4.3
 
         unstable = True
+        step = 0
         while unstable:  # Keep going until we reach a stable policy
+            step += 1
 
             # Policy Evaluation
-            delta = math.inf
-            while delta >= 0.001:
+            delta = 0
+            flag = True
+            while flag:
                 for s in self.states:  # Iterating over keys (states)
                     a = self.policy.get(s, random.choice(self.actions))  # Policy action (or random)
                     old_v = self.values.get(s, 0)  # Initially zero (pp. 75)
@@ -103,6 +145,8 @@ class MDP(object):
 
                     # delta <-- max(delta, |v - V(s)|)
                     delta = max(delta, abs(old_v - new_v))
+                    if delta < 0.001:
+                        flag = False
 
             # Policy Improvement
             unstable = False
@@ -121,14 +165,20 @@ class MDP(object):
 
                 if old_a != new_a:
                     unstable = True
+        print("end policy %d", step)
+        print(self.policy)
 
     def bellman(self, s, a) -> float:
         # Calculate part of the bellman equation for a state and current policy
         # V(s) = sum_{s'} T(s' | s, a) [ r(s, a, s') + gamma * V(s') ]
         # We forgo T(...) using `self.end_states` here.
+        # return sum([
+        #     self.reward(s, a, e) + self.gamma * self.values.get(e, 0)
+        #     for e in self.end_states(s, a)
+        # ])
         return sum([
-            self.reward(s, a, e) + self.gamma * self.values.get(e, 0)
-            for e in self.end_states(s, a)
+            self.rewards[a].get(s, {}).get(a, -1) + self.gamma * self.values.get(e, 0)
+            for e in self.states
         ])
 
     def end_states(self, s, a) -> list:
@@ -174,7 +224,7 @@ class MDP(object):
             t[i] = dict()
             r[i] = dict()
             t[i][(i[0][:pos] + '1' + i[0][pos + 1:], i[1], i[2])] = 1
-            r[i][(i[0][:pos] + '1' + i[0][pos + 1:], i[1], i[2])] = self.rooms[pos+1].area * self.area_rate
+            r[i][(i[0][:pos] + '1' + i[0][pos + 1:], i[1], i[2])] = self.rooms[pos + 1].area * self.area_rate
         return t, r
 
     def gen_trans_move(self):
@@ -284,12 +334,22 @@ class MDP(object):
             if info.area < 0.001:  # too small
                 continue
             info.centre = room.room_center
+            info.centre_pixel = result.room_information_in_pixel[idx].room_center
             info.img = util.gen_sensor_img_with_data(data, result.segmented_map)
             self.rooms[info.id] = info
         rospy.loginfo('[mdp]got %d rooms.' % len(self.rooms))
+        points_arr = [x.centre_pixel for x in self.rooms.values()]
+        clouds: PointCloud = PointCloud(
+            header=Header(frame_id='map'),
+            points=points_arr,
+            channels=[ChannelFloat32(name='rgb', values=[11 for _ in points_arr])]
+        )
+        # publish rooms centres for viz
+        self._pub_rooms.publish(clouds)
+        self.rooms = self.rooms[0:2]  # fixme delete
 
-        for i in self.rooms.values():
-            self._pub_sweep.publish(i.img)
+        # for i in self.rooms.values():
+        # self._pub_sweep.publish(i.img)
 
         # self.policy_iteration()
 
