@@ -38,7 +38,6 @@ class Clean(object):
         # Initialize variables
         self.battery = 100.0  # [0, 100]
         self.loss_rate = 0.03  # 1 level lost every 33 cells
-
         self.current_bin = []  # Current sequence of rooms
         self.current_path = []  # Current path being followed
         self.bin_index = 0  # Index within bin
@@ -135,8 +134,8 @@ class Clean(object):
         goal.input_map = image
         goal.map_resolution = resolution
         goal.map_origin = origin
-        goal.robot_radius = 0.22  # Same as footprint
-        goal.coverage_radius = 0.22  # Double as footprint
+        goal.robot_radius = 0.25  # Same as footprint
+        goal.coverage_radius = 0.25  # Double as footprint
         goal.starting_position = pose
         goal.planning_mode = 1  # Use the footprint, not FOV
 
