@@ -49,19 +49,9 @@ class Clean(object):
         image = grid_to_sensor_image(grid)
 
         # Get current pose
-        rospy.loginfo('Waiting for pose transform...')
- 
-        initial_pos = rospy.wait_for_message('/initialpose', PoseWithCovarianceStamped)
-        pose = initial_pos.pose.pose
-
-        # listener = tf.TransformListener()
-        # listener.waitForTransform('base_link', 'map', rospy.Time(), rospy.Duration(10))
-        #
-        # pose = PoseStamped()
-        # pose.header.frame_id = 'base_link'
-        # pose.header.stamp = rospy.Time()
-        # self.charger_pose = listener.transformPose('map', pose)
-        # pose = self.charger_pose.pose
+        rospy.loginfo('Waiting for initial pose...')
+        self.charger_pose = rospy.wait_for_message('/initialpose', PoseWithCovarianceStamped).pose
+        pose = self.charger_pose.pose
         pose = Pose2D(x=pose.position.x, y=pose.position.y, theta=getHeading(pose.orientation))
 
         # Setup action client(s)
@@ -150,10 +140,8 @@ class Clean(object):
 
     def get_pose(self) -> PoseStamped:
         """Get robot pose."""
-        pose = PoseStamped()
-        pose.header.frame_id = 'base_link'
-        pose.header.stamp = rospy.Time()
-        return self.tf_listener.transformPose('map', pose)
+        p = rospy.wait_for_message('/charger_pose', PoseWithCovarianceStamped).pose
+        return p
 
     def get_distance(self, p1: PoseStamped, p2: PoseStamped) -> float:
         """Get Euclidean distance between two poses."""

@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
     <node name="map_server" pkg="map_server" type="map_server" args="$(find roomba)/data/sim_data/meeting.yaml">
-        <!--remap from="/map" to="/roomba/map_ready"/-->
+        <remap from="/map" to="/roomba/map_ready"/>
     </node>
 </launch>

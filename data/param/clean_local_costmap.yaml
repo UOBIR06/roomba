@@ -10,6 +10,9 @@ local_costmap:
     - {name: obstacle_layer, type: "costmap_2d::ObstacleLayer"}
     - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
 
+    static_layer:
+        map_topic: "/roomba/map_ready"
+
     inflation_layer:
         inflation_radius: 0.1
 

@@ -9,6 +9,7 @@ global_costmap:
     - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
 
     static_layer:
+        map_topic: "/roomba/map_ready"
         track_unknown_space: true
 
     inflation_layer:
