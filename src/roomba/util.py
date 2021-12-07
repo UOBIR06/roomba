@@ -14,7 +14,7 @@ from sensor_msgs.msg import Image as SensorImage
 
 
 # Global variable(s)
-# HOME_ROOT = rospkg.RosPack().get_path('roomba')  # FIXME: Causes exception
+HOME_ROOT = rospkg.RosPack().get_path('roomba')  # FIXME: Causes exception
 
 
 def timed(fn):

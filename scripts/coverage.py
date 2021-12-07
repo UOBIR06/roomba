@@ -32,5 +32,5 @@ class Coverage(object):
 if __name__ == "__main__":
     rospy.init_node('coverage', anonymous=True)
     node = Coverage()
-    rospy.spin()
+    rospy.wait_for_message('/roomba/map_ready', OccupancyGrid)  # Do nothing with message
     node.flush()

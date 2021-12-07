@@ -1,4 +1,5 @@
 TrajectoryPlannerROS:
     holonomic_robot: false # Cannot strafe
     vx_samples: 6  # Take more samples of x velocity space
-    occdist_scale: 0.1  # Try to avoid obstacles more
+    oscillation_reset_dist: 0.1  # At least two cells travel before reset
+    escape_vel: -1.0
