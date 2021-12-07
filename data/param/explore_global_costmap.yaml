@@ -1,0 +1,15 @@
+global_costmap:
+    global_frame: map
+    robot_base_frame: base_link
+    update_frequency: 5.0 # Hz
+    static_map: false
+
+    plugins:
+    - {name: static_layer, type: "costmap_2d::StaticLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+    static_layer:
+        track_unknown_space: false  # So generated paths are smooth into unknown space
+
+    inflation_layer:
+        inflation_radius: 0.31  # Robot radius = sqrt(2 * 0.22^2)

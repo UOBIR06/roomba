@@ -1,8 +1,8 @@
 global_costmap:
     global_frame: map
     robot_base_frame: base_link
-    update_frequency: 10.0 # Hz
-    static_map: false
+    update_frequency: 5.0 # Hz
+    static_map: true
 
     plugins:
     - {name: static_layer, type: "costmap_2d::StaticLayer"}
@@ -10,3 +10,6 @@ global_costmap:
 
     static_layer:
         track_unknown_space: true
+
+    inflation_layer:
+        inflation_radius: 0.1

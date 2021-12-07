@@ -5,7 +5,7 @@
     <include file="$(find roomba)/launch/simulator.launch"/>
 
     <!-- move_base -->
-    <include file="$(find roomba)/launch/move_base.launch"/>
+    <include file="$(find roomba)/launch/explore_base.launch"/>
 
     <!-- SLAM gmapping -->
     <node name="slam" pkg="gmapping" type="slam_gmapping" args="scan:=base_scan">

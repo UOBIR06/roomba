@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+     <node name="nav" pkg="move_base" type="move_base" respawn="false" output="screen">
+        <rosparam file="$(find roomba)/data/param/costmap_common_params.yaml" command="load" ns="global_costmap"/>
+        <rosparam file="$(find roomba)/data/param/costmap_common_params.yaml" command="load" ns="local_costmap"/>
+        <rosparam file="$(find roomba)/data/param/clean_local_costmap.yaml" command="load"/>
+        <rosparam file="$(find roomba)/data/param/clean_global_costmap.yaml" command="load"/>
+        <rosparam file="$(find roomba)/data/param/clean_local_planner.yaml" command="load"/>
+    </node>
+</launch>
