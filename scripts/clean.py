@@ -190,7 +190,12 @@ class Clean(object):
             # Update battery level
             past = self.current_path.pop(0)
             now = self.current_path[0]
-            self.battery = max(0.0, self.battery - self.battery_lost(past, now))
+
+            if now is None:
+                rospy.loginfo('Moving onto next room...')
+                self.current_path.pop(0)
+            else:
+                self.battery = max(0.0, self.battery - self.battery_lost(past, now))
 
             if self.battery > 0:  # Keep going
                 rospy.loginfo(f'Battery level: {self.battery}')
