@@ -104,6 +104,9 @@ class Clean(object):
             # Get room coverage plan
             rospy.loginfo(f'Waiting for coverage in room #{i}...')
             r.path = self.get_coverage(r.image, result.map_resolution, result.map_origin, start)
+            # room's too small; no path found
+            if not r.path or not len(r.path):
+                continue
 
             for p in r.path:  # Change '/map' to 'map'
                 p.header.frame_id = 'map'
@@ -124,9 +127,14 @@ class Clean(object):
 
         self.ipa_exp.send_goal_and_wait(goal)
         result = self.ipa_exp.get_result()
+        if not result:
+            return
         path = result.coverage_path_pose_stamped
 
         # Smooth-out path
+        if not len(path):
+            return
+
         smooth = [path[0]]
         dt = math.pi / 6
         for i in range(1, len(path) - 1):
