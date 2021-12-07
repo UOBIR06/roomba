@@ -140,7 +140,7 @@ class Clean(object):
 
     def get_pose(self) -> PoseStamped:
         """Get robot pose."""
-        p = rospy.wait_for_message('/charger_pose', PoseWithCovarianceStamped).pose
+        p = rospy.wait_for_message('/amcl_pose', PoseWithCovarianceStamped).pose
         return p
 
     def get_distance(self, p1: PoseStamped, p2: PoseStamped) -> float:
