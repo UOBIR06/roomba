@@ -220,8 +220,6 @@ class Clean(object):
             if self.bin_index >= len(self.current_bin):
                 return None
 
-            # fixme shouldn't here attach charger point
-
             # More rooms to clean
             r = self.current_bin[self.bin_index]
             self.current_path = self.rooms[r].path
@@ -255,7 +253,7 @@ class Clean(object):
 
             if self.battery == 0:
                 rospy.logerr('Out of battery!')
-                # fixme we can send the robot go home now
+                # [Future] we can send the robot go home now
                 # and we'll have all the bin_index and path_index in positino when charging done
                 return
 
