@@ -116,15 +116,7 @@ def setup_image(image_path):
         return None
 
     img_flip = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    # img.encoding = 'mono8'
     img = cv2.flip(img_flip, 0)
-    # Return msg
-    # for i in img:
-    #     for j in i:
-    #         img[i][j] = 0 if img[i][j] < 250 else 255
-
-    # img = numpy.array([numpy.array([0 if j < 250 else 255 for j in i])for i in img])
-    # img =
 
     # Isolate the areas where the color is black(every channel=0) and white (every channel=255)
     black = np.where(img[:, :] < 250)
@@ -134,7 +126,7 @@ def setup_image(image_path):
     img[black] = (0,)
     img[white] = (255,)
 
-    res = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="mono8")  # , encoding="mono8"
+    res = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="mono8")
     return res
 
 
@@ -153,7 +145,7 @@ def gen_sensor_img_with_data(data, info) -> SensorImage:
 def grid_to_sensor_image(grid_map: OccupancyGrid) -> SensorImage:  # mat feed into Image
     # Convert it to an image
     # Remember: free space (0), unknown (-1), obstacle (100)
-    data = (map(lambda x: 255 if x == 0 else 0, grid_map.data))
+    data = map(lambda x: 255 if x == 0 else 0, grid_map.data)
     img = gen_sensor_img_with_data(data, grid_map.info)
     return img
 

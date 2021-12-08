@@ -46,7 +46,6 @@ class Clean(object):
         self.at_charger = True  # Flag to indicate end of bin
         self.returning = False  # Flag to indicate heading to charger
 
-        self.last_id = None
         self.last_distance = 0  # Distance to current goal (every 10 seconds)
         self.last_goal = None  # Latest goal sent to move_base
         self.last_time = None  # Last time progress was made
@@ -54,19 +53,20 @@ class Clean(object):
 
         # Get map
         rospy.loginfo('Waiting for map...')
-        grid = rospy.wait_for_message('/roomba/map_ready', OccupancyGrid)  # TODO: Change to '/roomba/map_ready' later
-        self.grid = Grid(grid)
+        grid = rospy.wait_for_message('/roomba/map_ready', OccupancyGrid)
+        self.grid = Grid(grid)  # Hmmm. Do you just want to use the data structure?
         image = grid_to_sensor_image(grid)
 
         # Get current pose
+        # [Not important]: explorer should be reading this and save as charging point.
+        # AND when explorer finished, it may not be in charging point and still have enough battery left.
         rospy.loginfo('Waiting for initial pose...')
         init = rospy.wait_for_message('/initialpose', PoseWithCovarianceStamped)
         stamped = PoseStamped()
         stamped.header = init.header
         stamped.pose = init.pose.pose
         self.charger_pose = stamped
-        pose = self.charger_pose.pose
-        pose = Pose2D(x=pose.position.x, y=pose.position.y, theta=getHeading(pose.orientation))
+        pose = Pose2D(x=stamped.pose.position.x, y=stamped.pose.position.y, theta=getHeading(stamped.pose.orientation))
 
         # Setup action client(s)
         rospy.loginfo('Waiting for ipa_*_server(s)...')
@@ -87,8 +87,8 @@ class Clean(object):
         goal.map_origin = self.grid.info.origin
         goal.return_format_in_pixel = True
         goal.return_format_in_meter = True
-        goal.robot_radius = 0.22  # Same as footprint Doesn't really matter
-        goal.room_segmentation_algorithm = 1
+        goal.robot_radius = 0.31  # Same as footprint; Doesn't really matter; Should be, but sth's wrong with server.
+        goal.room_segmentation_algorithm = 1  # morphological segmentation
 
         rospy.loginfo('Waiting for segmentation...')
         self.ipa_seg.send_goal_and_wait(goal)
@@ -108,25 +108,27 @@ class Clean(object):
             r.area = np.count_nonzero(data) * result.map_resolution ** 2  # m^2
 
             # Check if charger (starting location) is this room
-            if r.contains(pose):
+            # FIXME because contains just checkes the bounding box;
+            # so it's possible other room's overlapping
+            # fortunately, charger_room is only a flag;
+            # unfortunately, start is not. But it dosen't affect too much.
+            # and according to ipa's code, I believe we should leave it this way: pass it to all possible rooms
+            if r.contains(pose):  # and self.charger_room != -1
                 rospy.loginfo(f'Charger is in room #{i}')
                 self.charger_room = i
                 start = pose
             else:
+                # actually it should be the nearest point from last position; but we can't get that; NOT for now
                 start = Pose2D(r.centre.x, r.centre.y, 0)
 
             # Get room coverage plan
             rospy.loginfo(f'Waiting for coverage in room #{i}...')
             r.path = self.get_coverage(r.image, result.map_resolution, result.map_origin, start)
-            # room's too small; no path found
-            if not r.path or not len(r.path):
-                continue
-
-            for p in r.path:  # Change '/map' to 'map'
-                p.header.frame_id = 'map'
             r.cost = self.path_cost(r.path)
 
-            self.rooms.append(r)
+            # room's too small; no path found
+            if r.cost:
+                self.rooms.append(r)
 
     def get_coverage(self, image: Image, resolution: float, origin: Pose, pose: Pose2D) -> Optional[list]:
         """Ask room_exploration_server for a path within given room image."""
@@ -134,21 +136,23 @@ class Clean(object):
         goal.input_map = image
         goal.map_resolution = resolution
         goal.map_origin = origin
-        goal.robot_radius = 0.25  # Same as footprint
-        goal.coverage_radius = 0.25  # Double as footprint
+        goal.robot_radius = 0.31  # Same as footprint is 0.22
+        goal.coverage_radius = 0.31  # Double as footprint is 0.22
         goal.starting_position = pose
         goal.planning_mode = 1  # Use the footprint, not FOV
 
         self.ipa_exp.send_goal_and_wait(goal)
         result = self.ipa_exp.get_result()
+
         if not result:
             return
         path = result.coverage_path_pose_stamped
 
-        # Smooth-out path
+        # room's too small; no path found
         if not len(path):
             return
 
+        # Smooth-out path
         smooth = [path[0]]
         dt = math.pi / 6
         for i in range(1, len(path) - 1):
@@ -156,9 +160,14 @@ class Clean(object):
             it = getHeading(path[i].pose.orientation)
             nt = getHeading(path[i + 1].pose.orientation)
             if abs(nt - it) >= dt or abs(it - pt) >= dt:
-                smooth.append(path[i])
+                smooth.append(path[i])  # [ASK] what's this do? simply duplication works?
         smooth.append(path[-1])
         return smooth
+
+    #
+    # up: initialisation
+    # down: start process
+    #
 
     def get_pose(self) -> PoseStamped:
         """Get robot pose."""
@@ -171,7 +180,7 @@ class Clean(object):
     def get_distance(self, p1: PoseStamped, p2: PoseStamped) -> float:
         """Get Euclidean distance between two poses."""
         p1, p2 = p1.pose.position, p2.pose.position
-        return math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
+        return math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
 
     def battery_lost(self, p1: PoseStamped, p2: PoseStamped) -> float:
         """Amount of battery lost traveling between poses."""
@@ -182,10 +191,11 @@ class Clean(object):
     def path_cost(self, path: list) -> float:
         """Cost (battery loss) of following points on a path."""
         cost = 0
-        for i in range(len(path) - 1):
-            p1 = path[i]
-            p2 = path[i + 1]
-            cost += self.battery_lost(p1, p2)
+        if path and len(path):
+            for i in range(len(path) - 1):
+                p1 = path[i]
+                p2 = path[i + 1]
+                cost += self.battery_lost(p1, p2)
         return cost
 
     def send_goal(self, p: PoseStamped):
@@ -209,6 +219,8 @@ class Clean(object):
             self.bin_index += 1
             if self.bin_index >= len(self.current_bin):
                 return None
+
+            # fixme shouldn't here attach charger point
 
             # More rooms to clean
             r = self.current_bin[self.bin_index]
@@ -243,6 +255,8 @@ class Clean(object):
 
             if self.battery == 0:
                 rospy.logerr('Out of battery!')
+                # fixme we can send the robot go home now
+                # and we'll have all the bin_index and path_index in positino when charging done
                 return
 
         self.send_next_goal()
@@ -286,6 +300,7 @@ class Clean(object):
                 rospy.sleep(2)
 
                 if self.battery == 0:
+                    rospy.logerr('Out of battery! HELPPP')
                     return
 
                 if not self.returning:
@@ -296,6 +311,7 @@ class Clean(object):
                     pose = self.get_pose()
                     distance = self.get_distance(pose, goal)
 
+                    # [ASK]why is self.last_distance > distance when same_goal? robot moved?
                     if not same_goal or self.last_distance > distance:
                         self.last_distance = distance
                         self.last_time = rospy.get_time()
