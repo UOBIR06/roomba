@@ -278,6 +278,7 @@ class Clean(object):
             # Start cleaning
             self.battery = 100  # Start on full charge
             self.at_charger = False
+            self.returning = False
             self.send_goal(self.current_path[0])
 
             # Wait until round complete before going again
