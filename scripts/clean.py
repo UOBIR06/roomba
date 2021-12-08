@@ -88,7 +88,7 @@ class Clean(object):
         goal.return_format_in_pixel = True
         goal.return_format_in_meter = True
         goal.robot_radius = 0.22  # Same as footprint Doesn't really matter
-        goal.room_segmentation_algorithm = 2
+        goal.room_segmentation_algorithm = 1
 
         rospy.loginfo('Waiting for segmentation...')
         self.ipa_seg.send_goal_and_wait(goal)

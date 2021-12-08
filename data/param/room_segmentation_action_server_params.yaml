@@ -22,8 +22,8 @@ train_vrf: false
 
 # room area factor-> Set the limitation of area of the room -------> in [m^2]
 #morphological segmentation: 47.0 - 0.8 (means the room area after eroding/shrinking s.t. too small/big contours are not treated as rooms)
-room_area_factor_upper_limit_morphological: 47.0
-room_area_factor_lower_limit_morphological: 0.8
+room_area_factor_upper_limit_morphological: 2
+room_area_factor_lower_limit_morphological: 0.5
 
 #Voronoi segmentation: 120.0 - 1.53 (means the max/min area that an area separated by critical lines is allowed to have)
 room_area_factor_upper_limit_voronoi: 100.0        #120.0
