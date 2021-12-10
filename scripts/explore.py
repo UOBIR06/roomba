@@ -37,8 +37,8 @@ class Explorer(object):
         self.blacklist = []  # Banned frontiers b/c they're unreachable
         self.lock = Lock()  # For mutating the map structure(s)
 
-        self.timeout = 10  # No goal progress timeout
-        self.min_size = 15  # Minimum frontier size
+        self.timeout = 30.0  # No goal progress timeout
+        self.min_size = 0.75  # Minimum frontier size
 
         # Setup ROS hooks
         self.tf = tf.TransformListener()
@@ -56,38 +56,40 @@ class Explorer(object):
         self.do_spin()
         self.timer = rospy.Timer(rospy.Duration(1), lambda e: self.plan())
 
-    def build_frontier(self, x: int, y: int, ref: Pose) -> Frontier:
+    def build_frontier(self, start: tuple, ref: Pose) -> Frontier:
         """Given a starting UKNW_CELL, build a frontier of connected cells."""
         # Initialize search
-        queue = [(x, y)]
-        pt = ref.position
+        queue = [start]
+        rpt = ref.position
         f = Frontier()
         f.size = 1
         f.reference = ref
 
         while queue:
             # Visit cell
-            x, y = queue.pop()
-            self.visit[(x, y)] = 0  # Just use zero
-            wx, wy = self.map_to_world(x, y)
+            cell = queue.pop()
+            wx, wy = self.map_to_world(*cell)
 
-            cell = Point(wx, wy, 0)
-            f.points.append(cell)
+            pt = Point(wx, wy, 0)
+            f.points.append(pt)
             f.size += 1
             f.centre.x += wx
             f.centre.y += wy
 
-            dist = math.sqrt((pt.x - wx) ** 2 + (pt.y - wy) ** 2)
+            dist = math.sqrt((rpt.x - wx) ** 2 + (rpt.y - wy) ** 2)
             if dist < f.distance:
                 f.distance = dist
 
             # Look at 8 neighbours
-            for nx, ny in self.nhood_8(x, y):
-                if self.is_frontier(nx, ny):
-                    queue.append((nx, ny))
+            for n in self.nhood_8(*cell):
+                if self.is_frontier(*n):
+                    self.visit[n] = True
+                    queue.append(n)
 
         f.centre.x /= f.size
         f.centre.y /= f.size
+        f.distance *= self.info.resolution
+        f.size *= self.info.resolution
         return f
 
     def get_cell(self, x: int, y: int) -> int:
@@ -148,7 +150,7 @@ class Explorer(object):
         if self.get_cell(x, y) != self.UKNW_CELL:
             return False
 
-        if self.visit.get((x, y), -1) >= 0:
+        if self.visit.get((x, y), False):
             return False  # already visited
 
         for nx, ny in self.nhood_4(x, y):
@@ -159,16 +161,16 @@ class Explorer(object):
     def nearest_free(self, x: int, y: int) -> Optional[tuple]:
         """Find the nearest FREE_CELL to the given point."""
         queue = [(x, y)]
-        visit = {}
+        visit = {(x, y): True}
         while queue:
             cell = queue.pop(0)
-            visit[cell] = True
 
             if self.get_cell(*cell) == self.FREE_CELL:
                 return cell
-            for neigh in self.nhood_8(*cell):
-                if not visit.get(neigh, False):
-                    queue.append(neigh)
+            for n in self.nhood_8(*cell):
+                if not visit.get(n, False):
+                    queue.append(n)
+                    visit[n] = True
         return None
 
     def map_callback(self, msg: OccupancyGrid):
@@ -226,28 +228,28 @@ class Explorer(object):
             # self.viz.mark_point(wx, wy, (1, 1, 0), 0.10)
 
             # Initialize search
-            queue = [(*n_index, 0)]
+            queue = [n_index]
             frontiers = []
-            self.visit = {}
+            self.visit = {n_index: True}
 
             while queue:
                 # Visit cell
-                x, y, i = queue.pop()
-                self.visit[(x, y)] = i
+                cell = queue.pop()
 
                 # Look at 4 neighbours
-                for nx, ny in self.nhood_4(x, y):
-                    if self.visit.get((nx, ny), -1) >= 0:
+                for n in self.nhood_4(*cell):
+                    if self.visit.get(n, False):
                         continue  # already visited
+                    self.visit[n] = True
 
-                    occ = self.get_cell(nx, ny)
+                    occ = self.get_cell(*n)
                     if occ == self.FREE_CELL:
                         # Add to queue
-                        queue.append((nx, ny, i + 1))
+                        queue.append(n)
 
                     if occ == self.UKNW_CELL:
                         # Build new frontier
-                        f = self.build_frontier(nx, ny, pose)
+                        f = self.build_frontier(n, pose)
 
                         if not self.is_allowed(f.centre):
                             continue  # Reject blacklisted frontiers
@@ -348,7 +350,7 @@ class Explorer(object):
 
         # Still pursuing previous goal
         if same:
-            if self.reached and delta_time > self.timeout / 2:
+            if self.reached and delta_time > 5:
                 self.do_spin()
                 self.reached = False
             return
