@@ -14,6 +14,7 @@ from ipa_building_msgs.msg import *
 from nav_msgs.msg import OccupancyGrid
 from ortools.linear_solver import pywraplp
 from actionlib import SimpleActionClient, GoalStatus, GoalID
+from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 from roomba.util import getHeading, gen_sensor_img_with_data, grid_to_sensor_image
 from geometry_msgs.msg import PoseStamped, Pose2D, Pose, Point, Point32, Polygon, Quaternion, PoseWithCovarianceStamped
 
@@ -276,6 +277,9 @@ class Clean(object):
             rooms[i] = r.cost
         bins = self.bin_packing_planner(rooms)
 
+        # Re-order bins to minimize travel
+        bins = self.tsp_solver(bins)
+
         # Visit all the bins
         for b in bins:
             # Set current bin
@@ -319,6 +323,73 @@ class Clean(object):
                         self.send_next_goal()
 
         rospy.loginfo('All done cleaning!')
+
+    def tsp_solver(self, bins):
+        # Reference: https://developers.google.com/optimization/routing/tsp
+
+        # Do this for each bin:
+        mod = []
+        for b in bins:
+
+            # Create list of points
+            pts = [self.rooms[i].path[0] for i in b]  # First point in path is centre
+            pts.insert(0, self.charger_pose)  # Must include charger
+
+            # Create distance matrix
+            mat = []
+            for i, p1 in enumerate(pts):
+                row = []
+                for j, p2 in enumerate(pts):
+                    if i == j:
+                        row.append(0)
+                    else:
+                        row.append(self.get_distance(p1, p2))
+                mat.append(row)
+
+            # Create input argument
+            data = {
+                'distance_matrix': mat,
+                'num_vehicles': 1,
+                'depot': 0  # Start & end at charger
+            }
+
+            # Create routing model
+            manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
+                                                   data['num_vehicles'], data['depot'])
+            routing = pywrapcp.RoutingModel(manager)
+
+            # Create distance callback (Why Google, why?)
+            def distance_callback(from_index, to_index):
+                from_node = manager.IndexToNode(from_index)
+                to_node = manager.IndexToNode(to_index)
+                return data['distance_matrix'][from_node][to_node]
+
+            transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+
+            # Define cost of each arc
+            routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+            # Setting first solution heuristic
+            search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+            search_parameters.first_solution_strategy = (
+                routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
+
+            # Solve the problem
+            solution = routing.SolveWithParameters(search_parameters)
+
+            if routing.status() != routing.ROUTING_SUCCESS:
+                return []
+
+            # Save solution
+            new_bin = []
+            index = routing.Start(0)
+            while not routing.IsEnd(index):
+                n = manager.IndexToNode(index)
+                new_bin.append(b[n-1])
+                index = solution.Value(routing.NextVar(index))
+            mod.append(new_bin[1:])  # Don't include charger in bin
+
+        return mod
 
     # Uses bin packing to determine order of rooms to clean.
     # Pass a dictionary with room no. as key and its area as
