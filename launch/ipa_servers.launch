@@ -1,5 +1,10 @@
 <?xml version="1.0"?>
 <launch>
+
+    <!-- 4 debug & unit testing-->
+    <arg name="debug" default="0"/>
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find roomba)/data/rviz/room_explore.rviz" if="$(arg debug)"/>
+
     <!-- room_segmentation -->
     <node ns="room_segmentation" pkg="ipa_room_segmentation" type="room_segmentation_server" name="room_segmentation_server" output="screen" respawn="true" respawn_delay="2">
         <rosparam command="load" file="$(find roomba)/data/param/room_segmentation_action_server_params.yaml"/>

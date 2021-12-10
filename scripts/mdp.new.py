@@ -12,7 +12,7 @@ from roomba import util
 from roomba.classes import RoomInfo
 from copy import deepcopy
 
-from src.roomba.scripts.rooms import mock
+from src.roomba.data.mock.rooms import mock
 
 
 class MDP(object):
