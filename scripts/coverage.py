@@ -48,7 +48,7 @@ class Coverage(object):
 
         date = datetime.datetime.now()
         filename = date.strftime("%y-%m-%d_%H-%M-%S")
-        with open(os.path.join(util.HOME_ROOT, f'data/{filename}.csv'), 'w') as f:
+        with open(os.path.join(util.HOME_ROOT, f'data/logs/{filename}.csv'), 'w') as f:
             f.write(output)
             rospy.loginfo(f'Wrote output to {f.name}')
 

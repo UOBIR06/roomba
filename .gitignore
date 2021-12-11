@@ -142,4 +142,4 @@ cython_debug/
 .vscode
 
 # Data files
-data/*.csv
+data/logs/*.csv
