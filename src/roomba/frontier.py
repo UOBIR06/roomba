@@ -6,7 +6,7 @@ from roomba.util import getHeading
 class Frontier:
     alpha = 1.0  # Distance to frontier
     beta = 0.5   # Size of frontier (decreases cost)
-    gamma = 0.2  # Angle to frontier
+    gamma = 0.5  # Angle to frontier
 
     def __init__(self, r: Pose, s: int, d: float, c: Point, p: list):
         self.size = s
