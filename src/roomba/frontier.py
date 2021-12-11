@@ -4,23 +4,19 @@ from roomba.util import getHeading
 
 
 class Frontier:
-    alpha = 0.5  # Distance to frontier
-    beta = 0.05  # Size of frontier (decreases cost)
-    gamma = 0.9  # Angle to frontier
+    alpha = 1.0  # Distance to frontier
+    beta = 0.5   # Size of frontier (decreases cost)
+    gamma = 0.2  # Angle to frontier
 
-    def __init__(self):
-        self.size = 0
-        self.distance = math.inf
-        self.centre = Point(0, 0, 0)
-        self.cost = math.inf
-        self.points = []
-        self.path = None
-        self.reference = Pose()
+    def __init__(self, r: Pose, s: int, d: float, c: Point, p: list):
+        self.size = s
+        self.distance = d
+        self.centre = c
+        self.points = p
+
+        rt = getHeading(r.orientation)
+        ft = math.atan2(self.centre.y, self.centre.x)
+        self.angle = abs(ft - rt)
 
     def get_cost(self) -> float:
-        if self.cost == math.inf:
-            rt = getHeading(self.reference.orientation)
-            ft = math.atan2(self.centre.y, self.centre.x)
-            dt = abs(ft - rt)
-            self.cost = self.alpha * self.distance - self.beta * self.size + self.gamma * dt
-        return self.cost
+        return self.alpha * self.distance - self.beta * self.size + self.gamma * self.angle

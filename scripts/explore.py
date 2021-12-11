@@ -37,7 +37,7 @@ class Explorer(object):
         self.blacklist = []  # Banned frontiers b/c they're unreachable
         self.lock = Lock()  # For mutating the map structure(s)
 
-        self.timeout = 30.0  # No goal progress timeout
+        self.timeout = 15.0  # No goal progress timeout
         self.min_size = 0.75  # Minimum frontier size
 
         # Setup ROS hooks
@@ -60,25 +60,23 @@ class Explorer(object):
         """Given a starting UKNW_CELL, build a frontier of connected cells."""
         # Initialize search
         queue = [start]
-        rpt = ref.position
-        f = Frontier()
-        f.size = 1
-        f.reference = ref
+        pt = ref.position
+        size = 1
+        centre = Point(0, 0, 0)
+        distance = math.inf
+        points = []
 
         while queue:
             # Visit cell
             cell = queue.pop()
             wx, wy = self.map_to_world(*cell)
 
-            pt = Point(wx, wy, 0)
-            f.points.append(pt)
-            f.size += 1
-            f.centre.x += wx
-            f.centre.y += wy
-
-            dist = math.sqrt((rpt.x - wx) ** 2 + (rpt.y - wy) ** 2)
-            if dist < f.distance:
-                f.distance = dist
+            # Update values
+            points.append(Point(wx, wy, 0))
+            size += 1
+            centre.x += wx
+            centre.y += wy
+            distance = min(distance, math.sqrt((pt.x - wx) ** 2 + (pt.y - wy) ** 2))
 
             # Look at 8 neighbours
             for n in self.nhood_8(*cell):
@@ -86,11 +84,12 @@ class Explorer(object):
                     self.visit[n] = True
                     queue.append(n)
 
-        f.centre.x /= f.size
-        f.centre.y /= f.size
-        f.distance *= self.info.resolution
-        f.size *= self.info.resolution
-        return f
+        # Create frontier
+        centre.x /= size
+        centre.y /= size
+        distance *= self.info.resolution
+        size *= self.info.resolution
+        return Frontier(ref, size, distance, centre, points)
 
     def get_cell(self, x: int, y: int) -> int:
         """Get cell occupancy value."""
@@ -258,8 +257,19 @@ class Explorer(object):
 
                         frontiers.append(f)
 
-        # Sort and filter frontiers
-        frontiers.sort(key=lambda k: k.get_cost())
+        # Normalize and sort frontiers
+        if len(frontiers) > 1:
+            size = [f.size for f in frontiers]
+            dist = [f.distance for f in frontiers]
+            angl = [f.angle for f in frontiers]
+            smin, smax = min(size), max(size)
+            dmin, dmax = min(dist), max(dist)
+            amin, amax = min(angl), max(angl)
+            for f in frontiers:
+                f.distance = (f.distance - dmin) / (dmax - dmin)
+                f.size = (f.size - smin) / (smax - smin)
+                f.angle = (f.angle - amin) / (amax - amin)
+            frontiers.sort(key=lambda f: f.get_cost())
         return frontiers
 
     def goal_reached(self, status: GoalStatus, msg: MoveBaseResult):
@@ -350,7 +360,7 @@ class Explorer(object):
 
         # Still pursuing previous goal
         if same:
-            if self.reached and delta_time > 5:
+            if self.reached and delta_time > 2:
                 self.do_spin()
                 self.reached = False
             return
