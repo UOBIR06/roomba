@@ -37,7 +37,7 @@ class Explorer(object):
         self.blacklist = []  # Banned frontiers b/c they're unreachable
         self.lock = Lock()  # For mutating the map structure(s)
 
-        self.timeout = 15.0  # No goal progress timeout
+        self.timeout = 10.0  # No goal progress timeout
         self.min_size = 0.75  # Minimum frontier size
 
         # Setup ROS hooks
@@ -265,18 +265,21 @@ class Explorer(object):
             smin, smax = min(size), max(size)
             dmin, dmax = min(dist), max(dist)
             amin, amax = min(angl), max(angl)
-            for f in frontiers:
-                f.distance = (f.distance - dmin) / (dmax - dmin)
-                f.size = (f.size - smin) / (smax - smin)
-                f.angle = (f.angle - amin) / (amax - amin)
-            frontiers.sort(key=lambda f: f.get_cost())
+            if smax != smin and dmax != dmin and amax != amin:
+                for f in frontiers:
+                    f.distance = (f.distance - dmin) / (dmax - dmin)
+                    f.size = (f.size - smin) / (smax - smin)
+                    f.angle = (f.angle - amin) / (amax - amin)
+        frontiers.sort(key=lambda f: f.get_cost())
         return frontiers
 
     def goal_reached(self, status: GoalStatus, msg: MoveBaseResult):
-        rospy.loginfo(f'Reached goal: <{self.prev_goal.x}, {self.prev_goal.y}>')
-        if status == actionlib.GoalStatus.ABORTED:
-            self.blacklist.append(self.prev_goal)
         self.reached = True
+        if status == actionlib.GoalStatus.ABORTED:
+            rospy.loginfo(f'Blacklisted: <{self.prev_goal.x}, {self.prev_goal.y}>')
+            self.blacklist.append(self.prev_goal)
+            return
+        rospy.loginfo(f'Reached goal: <{self.prev_goal.x}, {self.prev_goal.y}>')
 
     def do_spin(self):
         """Do a (roughly) full spin."""
